@@ -223,14 +223,25 @@ fn sanitize(body: &str) -> String {
         // `data:` only for a picture's source: a `data:` link would open a
         // page the mail made, without this page's policy.
         .attribute_filter(|element, attribute, value| {
-            let data = value.trim_start().get(..5).is_some_and(|scheme| scheme.eq_ignore_ascii_case("data:"));
-            let picture = element == "img"
-                && attribute == "src"
-                && value.trim_start().get(..11).is_some_and(|start| start.eq_ignore_ascii_case("data:image/"));
+            let url = as_browsers_read(value);
+            let data = url.starts_with("data:");
+            let picture = element == "img" && attribute == "src" && url.starts_with("data:image/");
             (!data || picture).then_some(value.into())
         })
         .clean(body)
         .to_string()
+}
+
+/// A URL as a browser reads it, lowercased: leading and trailing controls
+/// and spaces trimmed, and every tab and line break inside dropped, so
+/// `\u{1}da&#9;ta:` is seen as the `data:` it is.
+fn as_browsers_read(value: &str) -> String {
+    value
+        .trim_matches(|c: char| c <= ' ')
+        .chars()
+        .filter(|c| !matches!(c, '\t' | '\n' | '\r'))
+        .collect::<String>()
+        .to_ascii_lowercase()
 }
 
 #[cfg(test)]
@@ -265,6 +276,10 @@ mod tests {
         let page = fs::read_to_string(write(dir.path(), 10, links, false, false).unwrap()).unwrap();
         assert!(!page.contains("data:text/html"), "{page}");
         assert!(page.contains("data:image/png;base64,AA"), "{page}");
+        let hidden = r#"<body><a href="da&#9;ta:text/html,x">a</a><a href="&#1;DATA:text/html,y">b</a><a href=" data&#10;:text/html,z">c</a></body>"#;
+        let page =
+            fs::read_to_string(write(dir.path(), 11, hidden, false, false).unwrap()).unwrap();
+        assert!(!page.contains("text/html"), "{page}");
         let page = fs::read_to_string(write(dir.path(), 7, html, true, true).unwrap()).unwrap();
         assert!(page.contains("img-src data: cid: https: http:") && page.contains("#0a0a0a"));
     }
