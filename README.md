@@ -41,6 +41,13 @@ the app's own Luau.
   pictures blocked until you load them. Attachments can be opened or saved,
   only on a click. **All Attachments** lists every file, by kind and search.
 
+- **Scramble** (View › Scramble Names and Text, ⌘⇧X), to share a
+  screenshot of a real archive: every name, address, subject, body, label
+  and filename is swapped for a made-up one of the same shape (a person keeps
+  one name everywhere), HTML mail shows as its scrambled text, pictures are
+  hidden, and the title bar says "Scrambled". Counts, dates and layout stay.
+  It is kept across launches; ⌘⇧X or the pill turns it off.
+
 ## Run it
 
 ```sh

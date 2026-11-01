@@ -19,7 +19,7 @@
 //! kept in `~/.cache/msgvault-moonframe/view.json`.
 
 use {
-    crate::{format, page},
+    crate::{format, page, scramble::Mask},
     chrono::{DateTime, Local, Utc},
     moonframe::{Data, Handle, Native},
     msgvault_core::{
@@ -55,6 +55,8 @@ struct View {
     file: String,
     /// Messages whose remote pictures the user let load.
     remote: BTreeSet<i64>,
+    /// Made-up names and text in place of the archive's, for screenshots.
+    scramble: bool,
 }
 
 impl Default for View {
@@ -68,6 +70,7 @@ impl Default for View {
             fquery: String::new(),
             file: String::new(),
             remote: BTreeSet::new(),
+            scramble: false,
         }
     }
 }
@@ -101,6 +104,10 @@ impl View {
                 .and_then(Value::as_array)
                 .map(|ids| ids.iter().filter_map(Value::as_i64).collect())
                 .unwrap_or_default(),
+            scramble: saved
+                .get("scramble")
+                .and_then(Value::as_bool)
+                .unwrap_or(false),
         }
     }
 
@@ -108,7 +115,7 @@ impl View {
         let value = json!({
             "mailbox": self.mailbox, "account": self.account, "query": self.query,
             "open": self.open, "fkind": self.fkind, "fquery": self.fquery,
-            "file": self.file, "remote": self.remote,
+            "file": self.file, "remote": self.remote, "scramble": self.scramble,
         });
         let partial = path.with_extension("json.tmp");
         let written = path
@@ -179,6 +186,9 @@ pub(crate) struct Vault {
     /// The attachments browser's files, newest first, once read.
     browser: Option<Vec<String>>,
     thumb_failed: HashSet<String>,
+    /// While scrambled, labels go out under made-up names: the real one
+    /// for each, to read the views' messages.
+    real_labels: HashMap<String, String>,
     notice: Option<Value>,
     notices: i64,
 }
@@ -199,6 +209,7 @@ impl Vault {
             files: HashMap::new(),
             browser: None,
             thumb_failed: HashSet::new(),
+            real_labels: HashMap::new(),
             notice: None,
             notices: 0,
         }
@@ -236,6 +247,12 @@ impl Vault {
                     .map_err(|error| format!("No msgvault archive, and no demo one: {error}"))
             },
         };
+    }
+
+    fn mask(&self) -> Mask {
+        Mask {
+            on: self.view.scramble,
+        }
     }
 
     fn tell(&mut self, ok: bool, text: impl Into<String>) {
@@ -280,9 +297,20 @@ impl Vault {
             .iter()
             .map(|label| (label.name.as_str(), label.color.as_deref()))
             .collect();
+        let mask = self.mask();
+        self.real_labels = labels
+            .iter()
+            .filter(|label| mask.on && label.kind == LabelKind::User)
+            .map(|label| (mask.label(&label.name), label.name.clone()))
+            .collect();
         let entry = |label: &mv::Label| {
+            let title = match label.kind {
+                LabelKind::User => mask.label(&label.display_name()),
+                _ => label.display_name(),
+            };
             json!({
-                "name": label.name, "title": label.display_name(), "count": label.count,
+                "name": if label.kind == LabelKind::User { mask.label(&label.name) } else { label.name.clone() },
+                "title": title, "count": label.count,
                 "color": format::label_color(&label.name, label.color.as_deref()),
             })
         };
@@ -317,8 +345,8 @@ impl Vault {
 
         let header = match current {
             Some(account) => json!({
-                "title": account.title(),
-                "subtitle": format!("{} · {}", account_kind(account), account.identifier),
+                "title": mask.name(account.title()),
+                "subtitle": format!("{} · {}", account_kind(account), mask.address(&account.identifier)),
                 "icon": format::account_icon(&account.kind),
             }),
             None => json!({
@@ -356,19 +384,24 @@ impl Vault {
                     )
                 };
                 if let Some(account) = current {
-                    subtitle = format!("{subtitle} · {}", account.title());
+                    subtitle = format!("{subtitle} · {}", mask.name(account.title()));
                 }
                 if page.has_more {
                     subtitle.push('+');
                 }
                 json!({
                     "title": if query.is_empty() {
-                        mailbox.unwrap_or_default().title()
+                        match mailbox.unwrap_or_default() {
+                            Mailbox::Label(name) if mv::Label::classify(&name, None) == LabelKind::User => {
+                                mask.label(&mv::display_label(&name))
+                            },
+                            other => other.title(),
+                        }
                     } else {
                         "Search".into()
                     },
                     "subtitle": subtitle,
-                    "rows": rows.iter().map(|m| row(m, now, &colors)).collect::<Vec<_>>(),
+                    "rows": rows.iter().map(|m| row(m, now, &colors, mask)).collect::<Vec<_>>(),
                 })
             },
         };
@@ -391,6 +424,7 @@ impl Vault {
         Ok(json!({
             "available": true,
             "sample": sample,
+            "scrambled": mask.on,
             "backend": if sample {
                 "Sample"
             } else if info.kind == BackendKind::Daemon {
@@ -407,8 +441,8 @@ impl Vault {
             },
             "header": header,
             "accounts": accounts.iter().map(|account| json!({
-                "id": account.id.0, "title": account.title(), "kind": account_kind(account),
-                "identifier": account.identifier, "icon": format::account_icon(&account.kind),
+                "id": account.id.0, "title": mask.name(account.title()), "kind": account_kind(account),
+                "identifier": mask.address(&account.identifier), "icon": format::account_icon(&account.kind),
                 "count": account.message_count,
             })).collect::<Vec<_>>(),
             "account": self.view.account,
@@ -420,7 +454,12 @@ impl Vault {
             "labels": shown(LabelKind::User),
             "categories": shown(LabelKind::Category),
             "archive": archive,
-            "mailbox": self.view.mailbox,
+            "mailbox": match self.view.mailbox.strip_prefix("label:") {
+                Some(name) if mask.on && mv::Label::classify(name, None) == LabelKind::User => {
+                    format!("label:{}", mask.label(name))
+                },
+                _ => self.view.mailbox.clone(),
+            },
             "query": query,
             "list": list,
             "selected": self.view.open,
@@ -439,11 +478,12 @@ impl Vault {
         accounts: &[Account],
         colors: &HashMap<&str, Option<&str>>,
     ) -> Value {
+        let mask = self.mask();
         let chat = thread.messages.iter().any(|m| !m.summary.is_email());
         let mut labels: Vec<Value> = Vec::new();
         let mut seen = HashSet::new();
         for message in &thread.messages {
-            for chip in chips(&message.summary, usize::MAX, colors) {
+            for chip in chips(&message.summary, usize::MAX, colors, mask) {
                 if seen.insert(chip["title"].as_str().unwrap_or_default().to_owned()) {
                     labels.push(chip);
                 }
@@ -458,7 +498,7 @@ impl Vault {
             meta.insert(0, mv::display_kind(&first.message_type));
         }
         if let Some(account) = accounts.iter().find(|a| Some(a.id) == first.account_id) {
-            let title = account.title().to_owned();
+            let title = mask.name(account.title());
             if !meta.contains(&title) {
                 meta.push(title);
             }
@@ -466,7 +506,7 @@ impl Vault {
         let subject = if thread.subject.trim().is_empty() {
             "(no subject)".to_owned()
         } else {
-            thread.subject.clone()
+            mask.text(&thread.subject)
         };
         let messages: Vec<Value> = thread
             .messages
@@ -486,7 +526,8 @@ impl Vault {
     fn message(&mut self, detail: &MessageDetail) -> Value {
         let summary = &detail.summary;
         self.known.insert(summary.id.0, summary.clone());
-        let sender = person(summary);
+        let mask = self.mask();
+        let sender = mask.name(&person(summary));
         let initials = format::initials(&sender);
         let body = detail
             .body_text
@@ -497,7 +538,7 @@ impl Vault {
         let names = |people: &[mv::Address]| {
             people
                 .iter()
-                .map(|person| person.label().to_owned())
+                .map(|person| mask.name(person.label()))
                 .collect::<Vec<_>>()
                 .join(", ")
         };
@@ -517,18 +558,19 @@ impl Vault {
         let html = detail
             .body_html
             .as_deref()
-            .filter(|_| summary.is_email())
+            // Scrambled, mail shows as its made-up text: a page would be real.
+            .filter(|_| summary.is_email() && !mask.on)
             .map(|html| self.html(summary.id.0, html));
         json!({
             "id": summary.id.0,
             "from": sender,
-            "address": if summary.from.address != sender { summary.from.address.as_str() } else { "" },
+            "address": if person(summary) != summary.from.address { mask.address_of(&person(summary), &summary.from.address) } else { String::new() },
             "to": names(&detail.to),
             "cc": names(&detail.cc),
             "date": format::full_date(summary.sent_at),
             "time": summary.sent_at.map(format::clock).unwrap_or_default(),
-            "snippet": page::clean(&summary.snippet),
-            "body": body.trim_end(),
+            "snippet": mask.text(&page::clean(&summary.snippet)),
+            "body": mask.text(body.trim_end()),
             "mine": detail.is_from_me,
             "starred": summary.starred,
             "attachments": summary.has_attachments,
@@ -688,9 +730,10 @@ impl Vault {
         } else {
             file.attachment.filename.clone()
         };
+        let mask = self.mask();
         json!({
             "id": file.id(),
-            "name": name,
+            "name": mask.file(&name),
             "size": if file.attachment.remote_url().is_some() {
                 "Remote file".to_owned()
             } else {
@@ -699,9 +742,9 @@ impl Vault {
             "kind": kind,
             "type": title.strip_suffix('s').unwrap_or(title),
             "icon": icon,
-            "thumb": self.thumbnail(file),
-            "from": person(&file.message),
-            "subject": file.message.subject,
+            "thumb": if mask.on { None } else { self.thumbnail(file) },
+            "from": mask.name(&person(&file.message)),
+            "subject": mask.text(&file.message.subject),
             "message": file.message.id.0,
             "date": match now {
                 Some(now) => format::list_date(file.message.sent_at, now),
@@ -836,7 +879,14 @@ impl Vault {
         let number = |key: &str| message.get(key).and_then(Data::as_i64);
         let flag = |key: &str| message.get(key).and_then(Data::as_bool) == Some(true);
         if let Some(mailbox) = text("mailbox") {
-            self.view.mailbox = mailbox;
+            // A made-up label name, while scrambled, stands for a real one.
+            self.view.mailbox = match mailbox.strip_prefix("label:") {
+                Some(name) => self
+                    .real_labels
+                    .get(name)
+                    .map_or(mailbox.clone(), |real| format!("label:{real}")),
+                None => mailbox,
+            };
             self.view.query.clear();
         }
         if let Some(account) = number("account") {
@@ -881,6 +931,9 @@ impl Vault {
             if let Some(id) = text("save_file") {
                 self.deliver(&id, true);
             }
+        }
+        if text("scramble").as_deref() == Some("toggle") {
+            self.view.scramble = !self.view.scramble;
         }
         if flag("refresh") {
             self.open();
@@ -946,13 +999,18 @@ fn chips(
     message: &MessageSummary,
     most: usize,
     colors: &HashMap<&str, Option<&str>>,
+    mask: Mask,
 ) -> Vec<Value> {
     message
         .visible_labels()
         .take(most)
         .map(|name| {
+            let title = mv::display_label(name);
             json!({
-                "title": mv::display_label(name),
+                "title": match mv::Label::classify(name, None) {
+                    LabelKind::User => mask.label(&title),
+                    _ => title,
+                },
                 "color": format::label_color(name, colors.get(name).copied().flatten()),
             })
         })
@@ -963,9 +1021,11 @@ fn row(
     message: &MessageSummary,
     now: DateTime<Local>,
     colors: &HashMap<&str, Option<&str>>,
+    mask: Mask,
 ) -> Value {
-    let sender = person(message);
-    let subject = message.subject.trim();
+    let sender = mask.name(&person(message));
+    let subject = mask.text(message.subject.trim());
+    let subject = subject.as_str();
     let (title, subject) = if message.is_email() {
         (
             sender,
@@ -990,7 +1050,7 @@ fn row(
         "id": message.id.0,
         "title": title,
         "subject": subject,
-        "snippet": page::clean(&message.snippet),
+        "snippet": mask.text(&page::clean(&message.snippet)),
         "date": format::list_date(message.sent_at, now),
         "unread": message.unread,
         "starred": message.starred,
@@ -1000,7 +1060,7 @@ fn row(
             Some(count) if message.is_email() && count > 1 => count,
             _ => 0,
         },
-        "chips": chips(message, 2, colors),
+        "chips": chips(message, 2, colors, mask),
         "hue": format::hue(&initials),
         "initials": initials,
     })
@@ -1138,6 +1198,60 @@ mod tests {
             "a mod other than reader or list was obeyed"
         );
         let _ = dir;
+    }
+
+    #[test]
+    fn scrambled_nothing_real_reaches_the_views() {
+        let (_dir, mut vault) = demo();
+        let plain = vault.snapshot().unwrap();
+        let id = plain["list"]["rows"][0]["id"].as_i64().unwrap();
+        vault.handle("list", &D::map([("open", D::from(id))]));
+        let real = vault.snapshot().unwrap().to_string();
+        for known in [
+            "Priya",
+            "Raman",
+            "migration",
+            "lumen.dev",
+            "Atlas",
+            "atlas-roadmap",
+        ] {
+            assert!(real.contains(known), "the demo archive has {known}");
+        }
+
+        vault.handle("titlebar", &D::map([("scramble", D::from("toggle"))]));
+        let scrambled = vault.snapshot().unwrap();
+        assert_eq!(scrambled["scrambled"], true);
+        assert!(scrambled["thread"]["messages"][0]["html"].is_null());
+        let text = scrambled.to_string();
+        for known in [
+            "Priya",
+            "Raman",
+            "migration",
+            "lumen.dev",
+            "Atlas",
+            "atlas-roadmap",
+        ] {
+            assert!(!text.contains(known), "{known} shown while scrambled");
+        }
+        // The same people, scrambled the same way, and kept across launches.
+        assert_eq!(text, vault.snapshot().unwrap().to_string());
+        assert!(View::read(&vault.cache.join("view.json")).scramble);
+
+        // A made-up label opens the real one.
+        let label = scrambled["labels"][0]["name"].as_str().unwrap().to_owned();
+        vault.handle(
+            "sidebar",
+            &D::map([("mailbox", D::from(format!("label:{label}")))]),
+        );
+        assert!(
+            vault
+                .real_labels
+                .values()
+                .any(|real| vault.view.mailbox == format!("label:{real}"))
+        );
+        let listed = vault.snapshot().unwrap();
+        assert_eq!(listed["mailbox"], format!("label:{label}"));
+        assert!(!listed["list"]["rows"].as_array().unwrap().is_empty());
     }
 
     #[test]

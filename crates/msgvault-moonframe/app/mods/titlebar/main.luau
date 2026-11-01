@@ -44,7 +44,15 @@ return mod {
 		local vault = app.vault
 		local window = app.window
 		local inset = if window.platform == "macos" and window.titlebar == "hidden" and not window.fullscreen then 80 else 12
-		local source = vault and vault.available and ui.row {
+		local source = vault and vault.available and vault.scrambled and ui.row {
+			class = "tb-source",
+			align = "center",
+			tooltip = "Names, addresses and text are made up, for screenshots: View › Scramble Names and Text (⌘⇧X) shows them again",
+			msg = { scramble = "toggle" },
+			to = "provider:vault",
+			ui.icon { name = "eye-off", size = "small" },
+			ui.text { "Scrambled", weight = "medium" },
+		} or vault and vault.available and ui.row {
 			class = "tb-source",
 			align = "center",
 			tooltip = if vault.sample then "No msgvault archive was found: showing sample data" else vault.location,

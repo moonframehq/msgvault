@@ -20,6 +20,10 @@ local MENUS: { { title: string, items: { any } } } = {
 		{ label = "Toggle Dark Mode", command = "toggle-theme", shortcut = "secondary-shift-l" },
 		"-",
 		{ label = "Show or Hide the Sidebar", msg = "toggle-left", shortcut = "secondary-s" },
+		"-",
+		-- Made-up names and text in place of the archive's, to share a
+		-- screenshot of a real one; the title bar says when it is on.
+		{ label = "Scramble Names and Text", msg = { scramble = "toggle" }, to = "provider:vault", shortcut = "secondary-shift-x" },
 	} },
 	{ title = "Window", items = {
 		{ label = "Minimize", command = "minimize", shortcut = "secondary-m" },

@@ -9,6 +9,7 @@
 
 mod format;
 mod page;
+mod scramble;
 mod vault;
 
 use {moonframe::Moonframe, std::process::ExitCode};
