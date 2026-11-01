@@ -612,16 +612,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ac07cdecf99051d9a5238b80f35af32cdeba5b336e55d957b318b50137e18da5"
 
 [[package]]
-name = "bincode"
-version = "2.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "36eaf5d7b090263e8150820482d5d93cd964a81e4019913c972f4edcc6edb740"
-dependencies = [
- "serde",
- "unty",
-]
-
-[[package]]
 name = "bit-set"
 version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1761,12 +1751,6 @@ checksum = "ab8ecd87370524b461f8557c119c405552c396ed91fc0a8eec68679eab26f94a"
 dependencies = [
  "libloading",
 ]
-
-[[package]]
-name = "doctest-file"
-version = "1.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c2db04e74f0a9a93103b50e90b96024c9b2bdca8bce6a632ec71b88736d3d359"
 
 [[package]]
 name = "document-features"
@@ -3337,93 +3321,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
 
 [[package]]
-name = "herdr-client"
-version = "0.1.0"
-source = "git+https://github.com/penso/herdr-gpui?rev=9133cb18b143c9b3f12777fe69e3058eb4ecc8bf#9133cb18b143c9b3f12777fe69e3058eb4ecc8bf"
-dependencies = [
- "base64 0.23.1",
- "crossbeam-channel",
- "herdr-protocol",
- "interprocess",
- "rustix",
- "serde",
- "serde_json",
- "tempfile",
- "thiserror 2.0.21",
- "tracing",
- "windows-sys 0.61.2",
-]
-
-[[package]]
-name = "herdr-credentials"
-version = "0.1.0"
-source = "git+https://github.com/penso/herdr-gpui?rev=9133cb18b143c9b3f12777fe69e3058eb4ecc8bf#9133cb18b143c9b3f12777fe69e3058eb4ecc8bf"
-dependencies = [
- "futures-lite",
- "oo7",
- "rustix",
- "secrecy",
- "security-framework",
- "thiserror 2.0.21",
- "tracing",
- "windows-sys 0.61.2",
- "zeroize",
-]
-
-[[package]]
-name = "herdr-github"
-version = "0.1.0"
-source = "git+https://github.com/penso/herdr-gpui?rev=9133cb18b143c9b3f12777fe69e3058eb4ecc8bf#9133cb18b143c9b3f12777fe69e3058eb4ecc8bf"
-dependencies = [
- "chrono",
- "getrandom 0.4.3",
- "herdr-client",
- "herdr-credentials",
- "herdr-rate-limit",
- "secrecy",
- "serde",
- "serde_json",
- "thiserror 2.0.21",
- "tracing",
- "ureq",
- "zeroize",
-]
-
-[[package]]
-name = "herdr-protocol"
-version = "0.1.0"
-source = "git+https://github.com/penso/herdr-gpui?rev=9133cb18b143c9b3f12777fe69e3058eb4ecc8bf#9133cb18b143c9b3f12777fe69e3058eb4ecc8bf"
-dependencies = [
- "base64 0.23.1",
- "bincode",
- "serde",
- "serde_json",
- "thiserror 2.0.21",
-]
-
-[[package]]
-name = "herdr-rate-limit"
-version = "0.1.0"
-source = "git+https://github.com/penso/herdr-gpui?rev=9133cb18b143c9b3f12777fe69e3058eb4ecc8bf#9133cb18b143c9b3f12777fe69e3058eb4ecc8bf"
-dependencies = [
- "chrono",
- "http",
-]
-
-[[package]]
-name = "herdr-vcs"
-version = "0.1.0"
-source = "git+https://github.com/penso/herdr-gpui?rev=9133cb18b143c9b3f12777fe69e3058eb4ecc8bf#9133cb18b143c9b3f12777fe69e3058eb4ecc8bf"
-dependencies = [
- "herdr-client",
- "herdr-github",
- "secrecy",
- "serde_json",
- "thiserror 2.0.21",
- "tracing",
-]
-
-[[package]]
 name = "hermit-abi"
 version = "0.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3886,19 +3783,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.119",
-]
-
-[[package]]
-name = "interprocess"
-version = "2.4.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a4a4fff6c51dece332bdbf3af5fe376c49cfc8dced782725e95be0bb489e35d7"
-dependencies = [
- "doctest-file",
- "libc",
- "recvmsg",
- "widestring",
- "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -4730,7 +4614,7 @@ dependencies = [
 [[package]]
 name = "moonframe"
 version = "0.1.0"
-source = "git+https://github.com/penso/moonframe?rev=c1797a79d021eb3c83008a2519b15bf4a2af2731#c1797a79d021eb3c83008a2519b15bf4a2af2731"
+source = "git+https://github.com/penso/moonframe?rev=b2dfdc9f0010a4892f688941318f459a2c353b84#b2dfdc9f0010a4892f688941318f459a2c353b84"
 dependencies = [
  "block2 0.6.2",
  "futures",
@@ -4738,8 +4622,6 @@ dependencies = [
  "lb-wry",
  "moonframe-acp",
  "moonframe-core",
- "moonframe-docs",
- "moonframe-git",
  "moonframe-mux",
  "moonframe-providers",
  "moonframe-store",
@@ -4761,7 +4643,7 @@ dependencies = [
 [[package]]
 name = "moonframe-acp"
 version = "0.1.0"
-source = "git+https://github.com/penso/moonframe?rev=c1797a79d021eb3c83008a2519b15bf4a2af2731#c1797a79d021eb3c83008a2519b15bf4a2af2731"
+source = "git+https://github.com/penso/moonframe?rev=b2dfdc9f0010a4892f688941318f459a2c353b84#b2dfdc9f0010a4892f688941318f459a2c353b84"
 dependencies = [
  "agent-client-protocol-schema",
  "moonframe-core",
@@ -4774,7 +4656,7 @@ dependencies = [
 [[package]]
 name = "moonframe-core"
 version = "0.1.0"
-source = "git+https://github.com/penso/moonframe?rev=c1797a79d021eb3c83008a2519b15bf4a2af2731#c1797a79d021eb3c83008a2519b15bf4a2af2731"
+source = "git+https://github.com/penso/moonframe?rev=b2dfdc9f0010a4892f688941318f459a2c353b84#b2dfdc9f0010a4892f688941318f459a2c353b84"
 dependencies = [
  "mlua",
  "thiserror 2.0.21",
@@ -4782,31 +4664,9 @@ dependencies = [
 ]
 
 [[package]]
-name = "moonframe-docs"
-version = "0.1.0"
-source = "git+https://github.com/penso/moonframe?rev=c1797a79d021eb3c83008a2519b15bf4a2af2731#c1797a79d021eb3c83008a2519b15bf4a2af2731"
-dependencies = [
- "moonframe-core",
- "moonframe-providers",
- "rustix",
-]
-
-[[package]]
-name = "moonframe-git"
-version = "0.1.0"
-source = "git+https://github.com/penso/moonframe?rev=c1797a79d021eb3c83008a2519b15bf4a2af2731#c1797a79d021eb3c83008a2519b15bf4a2af2731"
-dependencies = [
- "herdr-github",
- "herdr-vcs",
- "moonframe-core",
- "moonframe-providers",
- "serde_json",
-]
-
-[[package]]
 name = "moonframe-mux"
 version = "0.1.0"
-source = "git+https://github.com/penso/moonframe?rev=c1797a79d021eb3c83008a2519b15bf4a2af2731#c1797a79d021eb3c83008a2519b15bf4a2af2731"
+source = "git+https://github.com/penso/moonframe?rev=b2dfdc9f0010a4892f688941318f459a2c353b84#b2dfdc9f0010a4892f688941318f459a2c353b84"
 dependencies = [
  "moonframe-terminal",
  "serde_json",
@@ -4816,7 +4676,7 @@ dependencies = [
 [[package]]
 name = "moonframe-providers"
 version = "0.1.0"
-source = "git+https://github.com/penso/moonframe?rev=c1797a79d021eb3c83008a2519b15bf4a2af2731#c1797a79d021eb3c83008a2519b15bf4a2af2731"
+source = "git+https://github.com/penso/moonframe?rev=b2dfdc9f0010a4892f688941318f459a2c353b84#b2dfdc9f0010a4892f688941318f459a2c353b84"
 dependencies = [
  "moonframe-core",
  "serde",
@@ -4833,7 +4693,7 @@ dependencies = [
 [[package]]
 name = "moonframe-store"
 version = "0.1.0"
-source = "git+https://github.com/penso/moonframe?rev=c1797a79d021eb3c83008a2519b15bf4a2af2731#c1797a79d021eb3c83008a2519b15bf4a2af2731"
+source = "git+https://github.com/penso/moonframe?rev=b2dfdc9f0010a4892f688941318f459a2c353b84#b2dfdc9f0010a4892f688941318f459a2c353b84"
 dependencies = [
  "moonframe-core",
  "rusqlite",
@@ -4845,7 +4705,7 @@ dependencies = [
 [[package]]
 name = "moonframe-terminal"
 version = "0.1.0"
-source = "git+https://github.com/penso/moonframe?rev=c1797a79d021eb3c83008a2519b15bf4a2af2731#c1797a79d021eb3c83008a2519b15bf4a2af2731"
+source = "git+https://github.com/penso/moonframe?rev=b2dfdc9f0010a4892f688941318f459a2c353b84#b2dfdc9f0010a4892f688941318f459a2c353b84"
 dependencies = [
  "alacritty_terminal",
  "portable-pty",
@@ -6657,12 +6517,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "03251193000f4bd3b042892be858ee50e8b3719f2b08e5833ac4353724632430"
 
 [[package]]
-name = "recvmsg"
-version = "1.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d3edd4d5d42c92f0a659926464d4cce56b562761267ecf0f469d85b7de384175"
-
-[[package]]
 name = "redox_syscall"
 version = "0.5.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7196,16 +7050,6 @@ name = "seahash"
 version = "4.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1c107b6f4780854c8b126e228ea8869f4d7b71260f962fefb57b996b8959ba6b"
-
-[[package]]
-name = "secrecy"
-version = "0.10.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e891af845473308773346dc847b2c23ee78fe442e0472ac50e22a18a93d3ae5a"
-dependencies = [
- "serde",
- "zeroize",
-]
 
 [[package]]
 name = "security-framework"
@@ -8538,12 +8382,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8ecb6da28b8a351d773b68d5825ac39017e680750f980f3a1a85cd8dd28a47c1"
 
 [[package]]
-name = "unty"
-version = "0.0.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6d49784317cd0d1ee7ec5c716dd598ec5b4483ea832a2dced265471cc0f690ae"
-
-[[package]]
 name = "ureq"
 version = "3.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9629,12 +9467,6 @@ checksum = "bae2f2b2b816647a1cab1acc91f5bd20812d53cb344382635ec2181940c8034f"
 dependencies = [
  "libc",
 ]
-
-[[package]]
-name = "widestring"
-version = "1.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "72069c3113ab32ab29e5584db3c6ec55d416895e60715417b5b883a357c3e471"
 
 [[package]]
 name = "wiggle"

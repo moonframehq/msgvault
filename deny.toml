@@ -65,8 +65,8 @@ wildcards         = "deny"
 allow-wildcard-paths = true
 
 [sources]
-# Moonframe and the herdr-gpui crates it uses, pinned by rev in Cargo.toml.
-allow-git        = ["https://github.com/penso/herdr-gpui", "https://github.com/penso/moonframe"]
+# Moonframe, pinned by rev in Cargo.toml.
+allow-git        = ["https://github.com/penso/moonframe"]
 allow-registry   = ["https://github.com/rust-lang/crates.io-index"]
 unknown-git      = "deny"
 unknown-registry = "deny"

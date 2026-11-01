@@ -33,8 +33,9 @@ archive.
   (tests use `#[allow(clippy::unwrap_used, clippy::expect_used)]`). No
   `unsafe`.
 - Keep dependency versions in the root `[workspace.dependencies]`. Moonframe
-  is pinned by `rev`; its `herdr-core` feature is off (its `rustix` pin
-  conflicts, and this app keeps no terminals).
+  is pinned by `rev`, with only the features this app uses (`acp` for Send
+  feedback, `alacritty`, `tokio`): `git`, `docs` and `herdr-core` would pull
+  in the herdr-gpui crates for nothing.
 
 ## Verification
 

@@ -52,7 +52,12 @@ just check        # load every mod and provider headlessly
 Without an archive it opens the demo archive by itself, and the title bar says
 "Sample". It only ever reads: SQLite is opened read-only.
 
-Moonframe comes from GitHub, pinned in `Cargo.toml`. To work on both at once,
+`cargo run` (a debug build) adds Moonframe's developer tools: the Components
+menu, Inspect Element and Reload Modules. A release build (`just run`) leaves
+them out, as the app's users see it; `--dev` brings them back.
+
+Moonframe comes from GitHub, pinned in `Cargo.toml`, with only the features
+this app uses. To work on both at once,
 patch it to a checkout:
 
 ```toml
