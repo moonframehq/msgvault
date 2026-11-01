@@ -22,23 +22,17 @@ pub(crate) fn bodies(conn: &Connection, id: MessageId) -> Result<Option<Bodies>>
     };
     // mail-parser synthesises a missing text or HTML alternative from the
     // other one; keep only parts that really exist in the message.
-    let is_html = |id: &mail_parser::MessagePartId| {
-        message
-            .parts
-            .get(*id as usize)
-            .is_some_and(|part| matches!(part.body, mail_parser::PartType::Html(_)))
-    };
     let text = message
-        .text_body
-        .first()
-        .filter(|id| !is_html(id))
-        .and_then(|_| message.body_text(0))
+        .text_body()
+        .next()
+        .filter(|part| matches!(part.kind(), mail_parser::PartKind::Text))
+        .and_then(|part| part.text())
         .map(|text| text.into_owned());
     let html = message
-        .html_body
-        .first()
-        .filter(|id| is_html(id))
-        .and_then(|_| message.body_html(0))
+        .html_body()
+        .next()
+        .filter(|part| matches!(part.kind(), mail_parser::PartKind::Html))
+        .and_then(|part| part.text())
         .map(|html| html.into_owned());
     Ok(Some((text, html)))
 }
@@ -85,6 +79,43 @@ mod tests {
         flate2::{Compression, write::ZlibEncoder},
         std::io::Write,
     };
+
+    #[test]
+    #[allow(clippy::unwrap_used)]
+    fn mime_keeps_only_original_body_formats() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "CREATE TABLE message_raw (message_id INTEGER, raw_data BLOB, compression TEXT, raw_format TEXT)",
+        )
+        .unwrap();
+        for (mime, text, html) in [
+            (
+                "Content-Type: text/plain\r\n\r\nPlain body",
+                Some("Plain body"),
+                None,
+            ),
+            (
+                "Content-Type: text/html\r\n\r\n<p>HTML body</p>",
+                None,
+                Some("<p>HTML body</p>"),
+            ),
+            (
+                "Content-Type: multipart/alternative; boundary=body\r\n\r\n--body\r\nContent-Type: text/plain\r\n\r\nPlain body\r\n--body\r\nContent-Type: text/html\r\n\r\n<p>HTML body</p>\r\n--body--\r\n",
+                Some("Plain body"),
+                Some("<p>HTML body</p>"),
+            ),
+        ] {
+            conn.execute("DELETE FROM message_raw", []).unwrap();
+            conn.execute("INSERT INTO message_raw VALUES (1, ?1, NULL, 'mime')", [
+                mime.as_bytes(),
+            ])
+            .unwrap();
+            assert_eq!(
+                bodies(&conn, MessageId(1)).unwrap(),
+                Some((text.map(str::to_owned), html.map(str::to_owned))),
+            );
+        }
+    }
 
     #[test]
     fn zlib_round_trips_and_plain_passes_through() -> Result<()> {
