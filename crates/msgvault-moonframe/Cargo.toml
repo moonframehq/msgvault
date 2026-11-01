@@ -12,6 +12,7 @@ version.workspace      = true
 workspace = true
 
 [dependencies]
+ammonia.workspace       = true
 chrono.workspace        = true
 moonframe.workspace     = true
 msgvault-core.workspace = true

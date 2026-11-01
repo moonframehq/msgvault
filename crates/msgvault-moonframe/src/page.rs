@@ -37,15 +37,6 @@ pattern!(
 pattern!(STYLE, r"(?is)<style\b[^>]*>(.*?)</style\s*>");
 pattern!(IMPORT, r"(?i)@import[^;]*;");
 pattern!(BODY, r"(?is)<body\b[^>]*>(.*)</body\s*>");
-pattern!(
-    UNSAFE_BLOCK,
-    r"(?is)<(script|style|head|title|iframe|object|embed|form|noscript)\b.*?</(?:script|style|head|title|iframe|object|embed|form|noscript)\s*>"
-);
-pattern!(
-    UNSAFE_TAG,
-    r"(?i)<(?:script|meta|link|base|iframe|object|embed)\b[^>]*>"
-);
-pattern!(HANDLER, r#"(?i)\son\w+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)"#);
 pattern!(H1, r"(?i)<h1\b");
 pattern!(H23, r"(?i)<h[23]\b");
 pattern!(IMG, r"(?i)<img\b[^>]*>");
@@ -142,32 +133,21 @@ pub(crate) fn write(
     if file.is_file() {
         return Ok(file);
     }
-    // Only what is inside each style element, wrapped again: nothing else
-    // rides along with it.
+    // Only what is inside each style element, without a single `<` (CSS
+    // never needs one), so nothing can close the element and follow it.
     let styles: Vec<String> = STYLE
         .captures_iter(html)
         .filter_map(|captures| captures.get(1))
-        .map(|inner| format!("<style>{}</style>", IMPORT.replace_all(inner.as_str(), "")))
+        .map(|inner| {
+            let css = IMPORT.replace_all(inner.as_str(), "").replace('<', "");
+            format!("<style>{css}</style>")
+        })
         .collect();
     let body = BODY
         .captures(html)
         .and_then(|captures| captures.get(1))
         .map_or(html, |body| body.as_str());
-    // Again until nothing changes, so a removal can't put together what
-    // the one before took out (`<scr<script></script>ipt>`). The page's
-    // Content-Security-Policy runs no script whatever is left.
-    let mut body = body.to_owned();
-    loop {
-        let cleaned = [&*UNSAFE_BLOCK, &*UNSAFE_TAG, &*HANDLER]
-            .iter()
-            .fold(body.clone(), |text, pattern| {
-                pattern.replace_all(&text, "").into_owned()
-            });
-        if cleaned == body {
-            break;
-        }
-        body = cleaned;
-    }
+    let body = sanitize(body);
     let images = if remote {
         "data: cid: https: http:"
     } else {
@@ -213,6 +193,24 @@ small {{ color: {muted}; }}
     Ok(file)
 }
 
+/// The body parsed once, as a browser would (html5ever, through ammonia),
+/// keeping only an allowlist of tags and attributes: no script, handler,
+/// frame, form, meta or base survives. Inline styles and the presentational
+/// attributes mail is laid out with stay. The page's
+/// Content-Security-Policy still runs no script whatever is left.
+fn sanitize(body: &str) -> String {
+    ammonia::Builder::default()
+        .add_tags(["center", "font"])
+        .add_generic_attributes([
+            "style", "class", "id", "align", "valign", "width", "height", "bgcolor", "color",
+            "border", "cellpadding", "cellspacing", "dir", "face", "size",
+        ])
+        .url_schemes(["http", "https", "mailto", "cid", "data"].into())
+        .link_rel(Some("noopener noreferrer"))
+        .clean(body)
+        .to_string()
+}
+
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests {
@@ -237,6 +235,9 @@ mod tests {
         let nested = "<body><scr<script></script>ipt>alert(2)</script><p>Hi</p></body>";
         let page = fs::read_to_string(write(dir.path(), 8, nested, false, false).unwrap()).unwrap();
         assert!(!page.contains("<script"), "{page}");
+        let breakout = "<style>p{}</style ><script>alert(3)</script><style></style><body>x</body>";
+        let page = fs::read_to_string(write(dir.path(), 9, breakout, false, false).unwrap()).unwrap();
+        assert!(!page.contains("alert(3)"), "{page}");
         let page = fs::read_to_string(write(dir.path(), 7, html, true, true).unwrap()).unwrap();
         assert!(page.contains("img-src data: cid: https: http:") && page.contains("#0a0a0a"));
     }

@@ -20,6 +20,7 @@ expect_used = "deny"
 unwrap_used = "deny"
 
 [workspace.dependencies]
+ammonia     = "4"
 anyhow      = "1"
 chrono      = { default-features = false, features = ["clock", "std"], version = "0.4" }
 flate2      = "1"
