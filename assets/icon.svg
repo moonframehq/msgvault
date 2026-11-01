@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-labelledby="title">
+<title id="title">msgvault on Moonframe</title>
+<!-- An envelope under Moonframe's striped retro moon, in Moonframe's badge,
+     as herdr-moonframe's icon puts Herdr's ram. Render with `just icon`. -->
+<defs>
+  <clipPath id="tile"><rect x="100" y="100" width="824" height="824" rx="185"/></clipPath>
+  <clipPath id="badge"><circle cx="512" cy="512" r="295"/></clipPath>
+  <clipPath id="moon"><circle cx="512" cy="410" r="175"/></clipPath>
+  <filter id="shadow" x="-10%" y="-10%" width="120%" height="125%">
+    <feDropShadow dx="0" dy="12" stdDeviation="14" flood-color="#000" flood-opacity="0.35"/>
+  </filter>
+</defs>
+<rect x="100" y="100" width="824" height="824" rx="185" fill="#3b2417" filter="url(#shadow)"/>
+<g clip-path="url(#tile)">
+  <circle cx="512" cy="512" r="304" fill="#2e6462"/>
+  <g clip-path="url(#badge)">
+    <g clip-path="url(#moon)">
+      <rect x="337" y="235" width="350" height="157.5" fill="#f2b33d"/>
+      <rect x="337" y="392.5" width="350" height="78.75" fill="#e8642c"/>
+      <rect x="337" y="471.25" width="350" height="113.75" fill="#c63d26"/>
+      <rect x="337" y="383.75" width="350" height="15.75" fill="#2e6462"/>
+      <rect x="337" y="453.75" width="350" height="15.75" fill="#2e6462"/>
+      <rect x="337" y="518.5" width="350" height="15.75" fill="#2e6462"/>
+    </g>
+    <path d="M262 600 h500 v260 h-500z" fill="#f3e6cc"/>
+    <path d="M262 600 L512 770 L762 600" fill="none" stroke="#2e6462" stroke-width="22" stroke-linejoin="round"/>
+  </g>
+  <circle cx="512" cy="512" r="304" fill="none" stroke="#f3e6cc" stroke-width="18"/>
+</g>
+</svg>

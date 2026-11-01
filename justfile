@@ -55,6 +55,11 @@ package-macos out="target/dist":
     cargo build --locked --release
     scripts/release/package-macos.sh {{out}} target/release/msgvault-moonframe
 
+# Render the app icon (assets/icon.png, app/icon.png) from assets/icon.svg.
+icon:
+    rsvg-convert -w 1024 -h 1024 assets/icon.svg -o assets/icon.png
+    cp assets/icon.png crates/msgvault-moonframe/app/icon.png
+
 # Publish main's HEAD as v<version in Cargo.toml> (bump it first) through the
 # Release workflow, which waits for CI on that commit; see docs/releasing.md.
 release:
