@@ -202,8 +202,21 @@ fn sanitize(body: &str) -> String {
     ammonia::Builder::default()
         .add_tags(["center", "font"])
         .add_generic_attributes([
-            "style", "class", "id", "align", "valign", "width", "height", "bgcolor", "color",
-            "border", "cellpadding", "cellspacing", "dir", "face", "size",
+            "style",
+            "class",
+            "id",
+            "align",
+            "valign",
+            "width",
+            "height",
+            "bgcolor",
+            "color",
+            "border",
+            "cellpadding",
+            "cellspacing",
+            "dir",
+            "face",
+            "size",
         ])
         .url_schemes(["http", "https", "mailto", "cid", "data"].into())
         .link_rel(Some("noopener noreferrer"))
@@ -236,7 +249,8 @@ mod tests {
         let page = fs::read_to_string(write(dir.path(), 8, nested, false, false).unwrap()).unwrap();
         assert!(!page.contains("<script"), "{page}");
         let breakout = "<style>p{}</style ><script>alert(3)</script><style></style><body>x</body>";
-        let page = fs::read_to_string(write(dir.path(), 9, breakout, false, false).unwrap()).unwrap();
+        let page =
+            fs::read_to_string(write(dir.path(), 9, breakout, false, false).unwrap()).unwrap();
         assert!(!page.contains("alert(3)"), "{page}");
         let page = fs::read_to_string(write(dir.path(), 7, html, true, true).unwrap()).unwrap();
         assert!(page.contains("img-src data: cid: https: http:") && page.contains("#0a0a0a"));
