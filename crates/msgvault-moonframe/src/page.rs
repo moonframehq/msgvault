@@ -220,6 +220,15 @@ fn sanitize(body: &str) -> String {
         ])
         .url_schemes(["http", "https", "mailto", "cid", "data"].into())
         .link_rel(Some("noopener noreferrer"))
+        // `data:` only for a picture's source: a `data:` link would open a
+        // page the mail made, without this page's policy.
+        .attribute_filter(|element, attribute, value| {
+            let data = value.trim_start().get(..5).is_some_and(|scheme| scheme.eq_ignore_ascii_case("data:"));
+            let picture = element == "img"
+                && attribute == "src"
+                && value.trim_start().get(..11).is_some_and(|start| start.eq_ignore_ascii_case("data:image/"));
+            (!data || picture).then_some(value.into())
+        })
         .clean(body)
         .to_string()
 }
@@ -252,6 +261,10 @@ mod tests {
         let page =
             fs::read_to_string(write(dir.path(), 9, breakout, false, false).unwrap()).unwrap();
         assert!(!page.contains("alert(3)"), "{page}");
+        let links = r#"<body><a href="data:text/html,<b>x</b>">a</a><img src="data:image/png;base64,AA"></body>"#;
+        let page = fs::read_to_string(write(dir.path(), 10, links, false, false).unwrap()).unwrap();
+        assert!(!page.contains("data:text/html"), "{page}");
+        assert!(page.contains("data:image/png;base64,AA"), "{page}");
         let page = fs::read_to_string(write(dir.path(), 7, html, true, true).unwrap()).unwrap();
         assert!(page.contains("img-src data: cid: https: http:") && page.contains("#0a0a0a"));
     }
