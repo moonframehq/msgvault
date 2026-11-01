@@ -1,4 +1,4 @@
--- The title bar: room for the traffic lights, the brand, a search field in
+-- The title bar: room for the traffic lights, a search field in
 -- the middle (msgvault's Gmail-like syntax), then where the archive is read
 -- from, refresh and the light/dark switch.
 
@@ -9,8 +9,6 @@ return mod {
 
 	styles = {
 		[".tb"] = { background = "chrome", border = "bottom", border_color = "border", padding = { 0, 12, 0, 0 }, gap = 16 },
-		[".tb-logo"] = { background = "accent", color = "accent-foreground", radius = 6 },
-		[".tb-name"] = { weight = "bold" },
 		[".tb-search"] = { background = "background", border = true, border_color = "border", radius = 6, padding = { 0, 8 }, gap = 6 },
 		[".tb-search-icon"] = { color = "muted-foreground" },
 		[".tb-field"] = { background = "#00000000", border = "none", shadow = "none", padding = { 3, 0 } },
@@ -71,15 +69,6 @@ return mod {
 				align = "center",
 				shrink = false,
 				ui.row { width = inset - 12, shrink = false },
-				ui.row {
-					class = "tb-logo",
-					width = 22,
-					height = 22,
-					align = "center",
-					justify = "center",
-					ui.icon { name = "mails", size = "small" },
-				},
-				ui.text { "msgvault", class = "tb-name" },
 			},
 			ui.row {
 				grow = true,
