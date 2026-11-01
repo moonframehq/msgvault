@@ -9,9 +9,11 @@ on:
 # Deny by default; every job below declares the scopes it actually needs.
 permissions: {}
 
+# A newer push cancels a pull request's run, but every main run finishes:
+# a release requires a complete CI run for its exact commit.
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 env:
   CARGO_TERM_COLOR: always
@@ -19,6 +21,23 @@ env:
   NIGHTLY: nightly-2026-06-20
 
 jobs:
+  # Audits the workflows themselves: template injection, over-broad
+  # permissions, unpinned actions, persisted credentials, cache poisoning.
+  zizmor:
+    name: Workflow security
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: zizmorcore/zizmor-action@53290badfa369cb0bf7ad16342cb62c2fa47ac7b # v0.8.0
+        with:
+          advanced-security: false
+          online-audits: false
+
   format:
     name: Format
     runs-on: ubuntu-24.04
@@ -40,8 +59,10 @@ jobs:
 
   build:
     name: Build, lint and test
-    # Moonframe's window needs macOS for now, as its own CI does.
+    # The window is tried here on macOS; package.yml builds and checks the
+    # Linux and Windows packages.
     runs-on: macos-15
+    timeout-minutes: 60
     permissions:
       contents: read
     steps:

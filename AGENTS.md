@@ -43,6 +43,14 @@ archive.
   feedback, `alacritty`, `tokio`): `git`, `docs` and `herdr-core` would pull
   in the herdr-gpui crates for nothing.
 
+## Releases
+
+`just release` runs `.github/workflows/release.yml` on `main`'s HEAD, as
+Moonframe does; see docs/releasing.md. A release binary runs the app compiled
+into it (`AppFiles`); only one running from this checkout's `target/` reads
+`app/` live. Keep workflow actions pinned by SHA and check them with
+`just audit`.
+
 ## Verification
 
 - `just format`, then `just ci`: formatting, lockfile, clippy with

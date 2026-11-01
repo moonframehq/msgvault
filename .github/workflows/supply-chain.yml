@@ -1,0 +1,42 @@
+name: Supply chain
+
+on:
+  push:
+    branches: [main]
+    paths: ['**/Cargo.toml', '**/Cargo.lock', deny.toml, .github/workflows/supply-chain.yml]
+  pull_request:
+    paths: ['**/Cargo.toml', '**/Cargo.lock', deny.toml, .github/workflows/supply-chain.yml]
+  # Advisories are filed against dependencies that are not changing, so this
+  # has to run on a clock to be useful at all.
+  schedule:
+    - cron: '17 6 * * 1'
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: supply-chain-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  cargo-deny:
+    name: cargo-deny (${{ matrix.check }})
+    # cargo-deny reads the lockfile and never builds; deny.toml names every
+    # shipped target, so one Linux runner covers them all.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        # Split so an advisory filed upstream does not mask a license or
+        # source regression introduced by the change under review.
+        check: [advisories, bans licenses sources]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2.1.1
+        with:
+          command: check ${{ matrix.check }}

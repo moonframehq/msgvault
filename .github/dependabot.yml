@@ -1,0 +1,34 @@
+version: 2
+
+updates:
+  # Pinned action SHAs go stale silently; this is the only thing watching them.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    # A compromised release is usually yanked within days. Waiting keeps an
+    # automated PR from being the thing that pulls it in.
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: chore
+    groups:
+      actions:
+        patterns: ["*"]
+
+  # Workspace dependencies, grouped so the lockfile moves in one reviewable PR.
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: chore
+    groups:
+      cargo-minor-patch:
+        update-types: [minor, patch]
+    ignore:
+      # Moonframe is pinned by rev; moving it is a manual, tested change.
+      - dependency-name: moonframe

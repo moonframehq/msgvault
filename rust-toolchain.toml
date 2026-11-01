@@ -2,3 +2,5 @@
 channel    = "1.99.0"
 components = ["clippy", "rustfmt"]
 profile    = "minimal"
+# The toolbox's Wasm providers, prebuilt into the macOS bundle.
+targets = ["wasm32-wasip2"]

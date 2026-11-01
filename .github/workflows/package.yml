@@ -1,0 +1,150 @@
+name: Package
+
+# Builds every release package, unsigned, from optimized builds: the macOS
+# universal msgvault.app and disk image, Linux tarballs, Windows zips. The release
+# workflow calls this for the bytes it signs and publishes; on its own it
+# runs when what the packages are made from changes, so a packaging mistake
+# fails the pull request rather than a release.
+on:
+  workflow_call:
+    inputs:
+      ref:
+        description: Commit to package
+        required: true
+        type: string
+  pull_request:
+    paths:
+      - .github/workflows/package.yml
+      - .github/workflows/release.yml
+      - assets/macos/**
+      - rust-toolchain.toml
+      - scripts/install-linux-deps.sh
+      - scripts/release/**
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  # Called from the release, this run belongs to the release's group.
+  group: package-${{ github.workflow == 'Package' && github.ref || github.run_id }}
+  cancel-in-progress: ${{ github.workflow == 'Package' && github.ref != 'refs/heads/main' }}
+
+env:
+  CARGO_TERM_COLOR: always
+
+defaults:
+  run:
+    shell: bash
+
+# No caches anywhere in this workflow: the release ships what it builds, so
+# nothing a pull request could have written may feed into it.
+jobs:
+  # Both architectures build on Apple Silicon; x86_64 cross-compiles and is
+  # checked under Rosetta.
+  macos:
+    name: macOS (universal)
+    runs-on: macos-15
+    timeout-minutes: 90
+    permissions:
+      contents: read
+    env:
+      MACOSX_DEPLOYMENT_TARGET: '13.0'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref }}
+          persist-credentials: false
+      - name: Install the pinned Rust toolchain
+        run: |
+          rustup toolchain install
+          rustup target add aarch64-apple-darwin x86_64-apple-darwin
+      - name: Require Rosetta for the x86_64 check
+        run: arch -x86_64 /usr/bin/true || sudo softwareupdate --install-rosetta --agree-to-license
+      - name: Build optimized executables
+        run: |
+          for target in aarch64-apple-darwin x86_64-apple-darwin; do
+            cargo build --locked --release -p msgvault-moonframe --target "$target"
+          done
+      - name: Package the app and disk image
+        run: |
+          scripts/release/package-macos.sh dist \
+            target/aarch64-apple-darwin/release/msgvault-moonframe \
+            target/x86_64-apple-darwin/release/msgvault-moonframe
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: package-macos
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 7
+
+  linux:
+    name: Linux (${{ matrix.target }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            target: x86_64-unknown-linux-gnu
+          - runner: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+    permissions:
+      contents: read
+    env:
+      TARGET: ${{ matrix.target }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref }}
+          persist-credentials: false
+      - name: Install Linux build dependencies
+        run: scripts/install-linux-deps.sh
+      - name: Install the pinned Rust toolchain
+        run: |
+          rustup toolchain install
+          test "$(rustc -vV | sed -n 's/^host: //p')" = "$TARGET"
+      - name: Build the optimized executable
+        run: cargo build --locked --release -p msgvault-moonframe --target "$TARGET"
+      - name: Package the tarball
+        run: scripts/release/package-archive.sh "$TARGET" "target/$TARGET/release/msgvault-moonframe" dist
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: package-${{ matrix.target }}
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 7
+
+  windows:
+    name: Windows (${{ matrix.target }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: windows-2025
+            target: x86_64-pc-windows-msvc
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+    permissions:
+      contents: read
+    env:
+      TARGET: ${{ matrix.target }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref }}
+          persist-credentials: false
+      - name: Install the pinned Rust toolchain
+        run: |
+          rustup toolchain install
+          test "$(rustc -vV | sed -n 's/^host: //p')" = "$TARGET"
+      - name: Build the optimized executable
+        run: cargo build --locked --release -p msgvault-moonframe --target "$TARGET"
+      - name: Package the zip
+        run: scripts/release/package-archive.sh "$TARGET" "target/$TARGET/release/msgvault-moonframe.exe" dist
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: package-${{ matrix.target }}
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 7

@@ -102,6 +102,13 @@ moonframe::perf: provider vault: published, 4 views ran in 9.8ms
 
 `RUST_LOG=msgvault_moonframe=info,moonframe=info` shows them (on by default).
 
+## Install
+
+Each release has a macOS disk image (signed and notarized), Linux tarballs
+and a Windows zip, with checksums, Sigstore signatures, SLSA build
+provenance and an SBOM; see [docs/releasing.md](docs/releasing.md) for how
+it is made and how to verify a download.
+
 ## Develop
 
 `just format` (nightly rustfmt and taplo), then `just ci`: formatting,
