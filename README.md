@@ -69,9 +69,10 @@ just check        # load every mod and provider headlessly
 Without an archive it opens the demo archive by itself, and the title bar says
 "Sample". It only ever reads: SQLite is opened read-only.
 
-`cargo run` (a debug build) adds Moonframe's developer tools: the Components
-menu, Inspect Element and Reload Modules. A release build (`just run`) leaves
-them out, as the app's users see it; `--dev` brings them back.
+**Developer Mode**, in the app menu, turns on Moonframe's tools for changing
+the app as it runs (the Components menu, Inspect Element, Reload Modules),
+live and without a rebuild; the choice is kept. Until you pick, it is on in
+`cargo run` and off in `just run` (a release build).
 
 Moonframe comes from GitHub, pinned in `Cargo.toml`, with only the features
 this app uses. To work on both at once,

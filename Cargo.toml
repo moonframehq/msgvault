@@ -30,7 +30,7 @@ regex       = "1"
 # repository; to work on both, patch it to a checkout:
 #   [patch."https://github.com/penso/moonframe"]
 #   moonframe = { path = "../moonframe/crates/moonframe" }
-moonframe     = { default-features = false, features = ["acp", "alacritty", "tokio"], git = "https://github.com/penso/moonframe", rev = "b2dfdc9f0010a4892f688941318f459a2c353b84" }
+moonframe     = { default-features = false, features = ["acp", "alacritty", "tokio"], git = "https://github.com/penso/moonframe", rev = "00387b5a7a995479cb546e5b7f6ef1156bc7a34c" }
 msgvault-core = { path = "crates/msgvault-core" }
 rusqlite      = { features = ["bundled"], version = "0.41" }
 serde         = { features = ["derive"], version = "1" }
