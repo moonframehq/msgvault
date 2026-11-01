@@ -720,16 +720,18 @@ impl Vault {
             return None;
         }
         let name = attachment.filename.to_ascii_lowercase();
+        // Only a known picture extension, never text from the message: a
+        // MIME type such as `image/../../x` must not choose the path.
+        const PICTURES: [&str; 9] = [
+            "png", "jpg", "jpeg", "gif", "webp", "bmp", "tif", "tiff", "heic",
+        ];
+        let mime = attachment.mime_type.to_ascii_lowercase();
         let ext = name
             .rsplit_once('.')
             .map(|(_, ext)| ext)
-            .filter(|ext| {
-                matches!(
-                    *ext,
-                    "png" | "jpg" | "jpeg" | "gif" | "webp" | "bmp" | "tif" | "tiff" | "heic"
-                )
-            })
-            .or_else(|| attachment.mime_type.strip_prefix("image/"))
+            .or_else(|| mime.strip_prefix("image/"))
+            .and_then(|ext| PICTURES.iter().find(|known| **known == ext))
+            .copied()
             .unwrap_or("png");
         let key: String = attachment
             .content_hash
@@ -823,6 +825,7 @@ impl Vault {
                 .unwrap_or(name);
             self.tell(true, format!("Saved {saved} to Downloads"));
         } else {
+            quarantine(&path);
             system_open(&[&shown]);
             self.tell(true, format!("Opened {name}"));
         }
@@ -1026,6 +1029,22 @@ fn unique(dir: &Path, name: &str) -> PathBuf {
         n += 1;
     }
     path
+}
+
+/// Marks a file written from an attachment as downloaded (macOS), so the
+/// system asks before running anything executable in it.
+fn quarantine(path: &Path) {
+    if !cfg!(target_os = "macos") {
+        return;
+    }
+    let stamp = format!("0081;{:x};{};", Utc::now().timestamp(), crate::NAME);
+    let marked = Command::new("xattr")
+        .args(["-w", "com.apple.quarantine", &stamp])
+        .arg(path)
+        .status();
+    if !marked.is_ok_and(|status| status.success()) {
+        tracing::warn!(path = %path.display(), "vault: cannot mark the file as downloaded");
+    }
 }
 
 /// The system's opener (`open` on macOS, `xdg-open` elsewhere), unless

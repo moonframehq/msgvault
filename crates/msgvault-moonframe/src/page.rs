@@ -34,7 +34,7 @@ pattern!(
     REMOTE,
     r#"(?i)(?:src|background|srcset)\s*=\s*["']?\s*(?:https?:)?//|url\(\s*['"]?\s*(?:https?:)?//"#
 );
-pattern!(STYLE, r"(?is)<style\b.*?</style\s*>");
+pattern!(STYLE, r"(?is)<style\b[^>]*>(.*?)</style\s*>");
 pattern!(IMPORT, r"(?i)@import[^;]*;");
 pattern!(BODY, r"(?is)<body\b[^>]*>(.*)</body\s*>");
 pattern!(
@@ -142,17 +142,32 @@ pub(crate) fn write(
     if file.is_file() {
         return Ok(file);
     }
+    // Only what is inside each style element, wrapped again: nothing else
+    // rides along with it.
     let styles: Vec<String> = STYLE
-        .find_iter(html)
-        .map(|style| IMPORT.replace_all(style.as_str(), "").into_owned())
+        .captures_iter(html)
+        .filter_map(|captures| captures.get(1))
+        .map(|inner| format!("<style>{}</style>", IMPORT.replace_all(inner.as_str(), "")))
         .collect();
     let body = BODY
         .captures(html)
         .and_then(|captures| captures.get(1))
         .map_or(html, |body| body.as_str());
-    let body = UNSAFE_BLOCK.replace_all(body, "");
-    let body = UNSAFE_TAG.replace_all(&body, "");
-    let body = HANDLER.replace_all(&body, "");
+    // Again until nothing changes, so a removal can't put together what
+    // the one before took out (`<scr<script></script>ipt>`). The page's
+    // Content-Security-Policy runs no script whatever is left.
+    let mut body = body.to_owned();
+    loop {
+        let cleaned = [&*UNSAFE_BLOCK, &*UNSAFE_TAG, &*HANDLER]
+            .iter()
+            .fold(body.clone(), |text, pattern| {
+                pattern.replace_all(&text, "").into_owned()
+            });
+        if cleaned == body {
+            break;
+        }
+        body = cleaned;
+    }
     let images = if remote {
         "data: cid: https: http:"
     } else {
@@ -219,6 +234,9 @@ mod tests {
         let page = fs::read_to_string(write(dir.path(), 7, html, false, false).unwrap()).unwrap();
         assert!(!page.contains("alert") && !page.contains("onload"));
         assert!(page.contains("img-src data: cid:;"));
+        let nested = "<body><scr<script></script>ipt>alert(2)</script><p>Hi</p></body>";
+        let page = fs::read_to_string(write(dir.path(), 8, nested, false, false).unwrap()).unwrap();
+        assert!(!page.contains("<script"), "{page}");
         let page = fs::read_to_string(write(dir.path(), 7, html, true, true).unwrap()).unwrap();
         assert!(page.contains("img-src data: cid: https: http:") && page.contains("#0a0a0a"));
     }
