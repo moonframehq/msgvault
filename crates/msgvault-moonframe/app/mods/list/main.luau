@@ -21,8 +21,11 @@ return mod {
 		[".ls-head"] = { border = "bottom", border_color = "border", padding = { 0, 16 } },
 		[".ls-title"] = { size = "large", weight = "bold" },
 		[".ls-sub"] = { size = "small", color = "muted-foreground" },
-		[".ls-row"] = { padding = { 10, 12, 10, 0 }, gap = 12, border = "bottom", border_color = "border/60" },
+		[".ls-row"] = { padding = { 10, 12, 10, 0 }, gap = 12, border = "bottom", border_color = "border/60", transition = "1200ms ease-out" },
 		[".ls-row:hover"] = { background = "list-hover" },
+		-- A row a sync just brought: tinted, then easing back as it settles.
+		[".ls-row:fresh"] = { background = "accent/15" },
+		[".ls-more"] = { border = "bottom", border_color = "border/60" },
 		[".ls-row:selected"] = { background = "list-active" },
 		[".ls-bar"] = { background = "#00000000" },
 		[".ls-bar:selected"] = { background = "accent" },
@@ -203,10 +206,21 @@ return mod {
 			gap = "none",
 			header,
 			ui.list {
-				id = "rows",
-				count = #rows,
+				-- One list per mailbox, account and search: a new one starts
+				-- at its top, while a sync's rows come into the one shown.
+				id = "rows-" .. (list.key or ""),
+				count = #rows + (if list.more then 1 else 0),
 				row_height = ROW,
 				row = function(i)
+					if i > #rows then
+						return ui.row {
+							class = "ls-more",
+							height = ROW,
+							align = "center",
+							justify = "center",
+							ui.button { "Show more", small = true, msg = { more = true }, to = "provider:vault" },
+						}
+					end
 					local m = rows[i]
 					local on = m.id == selected
 					local chips = {}
@@ -222,6 +236,7 @@ return mod {
 						class = "ls-row",
 						height = ROW,
 						selected = on,
+						state = if m.fresh then "fresh" else nil,
 						msg = { open = m.id },
 						to = "provider:vault",
 						ui.row { class = "ls-bar", width = 3, selected = on },

@@ -59,8 +59,8 @@ return mod {
 			local suffix = nil
 			if count and count > 0 then
 				suffix = ui.row {
+					-- As wide as its number: 17,122 fits as well as 3.
 					class = if strong then "sb-pill" else "sb-count",
-					width = 30,
 					height = 18,
 					align = "center",
 					justify = "center",

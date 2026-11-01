@@ -27,6 +27,12 @@ archive.
 - HTML pages run no script and load nothing remote unless the user asked for
   that message (`page::write`).
 
+- **Speed.** `Vault::snapshot` reads each part through `Cache` (accounts
+  and totals, counts and labels by account, the list by mailbox, account and
+  search, the thread by message). Invalidate only what a message changes; a
+  sync (`Vault::synced`, the database files' size and time) clears it all.
+  Check the `vault: <click> in N ms (...)` log line after a change.
+
 ## Rust conventions
 
 - No `unwrap`/`expect` in production code; the workspace lints deny them

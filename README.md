@@ -41,6 +41,9 @@ the app's own Luau.
   pictures blocked until you load them. Attachments can be opened or saved,
   only on a click. **All Attachments** lists every file, by kind and search.
 
+- **Live:** what msgvault syncs shows by itself within two seconds (the
+  database's files are watched, no query; a daemon is asked every 30 s), and
+  new rows come in tinted, then settle.
 - **Scramble** (View › Scramble Names and Text, ⌘⇧X), to share a
   screenshot of a real archive: every name, address, subject, body, label
   and filename is swapped for a made-up one (a person keeps one name
@@ -82,6 +85,22 @@ patch it to a checkout:
 [patch."https://github.com/penso/moonframe"]
 moonframe = { path = "../moonframe/crates/moonframe" }
 ```
+
+## Speed
+
+Each part of what the window shows is read once and kept until what it
+depends on changes: opening a message reads only its thread, switching
+mailboxes only the list, and the counts and labels (the costly queries on a
+large archive) only when the account changes or msgvault syncs. The list
+reads 100 conversations at a time ("Show more" for the next). Every click
+logs where its time went, without any of the archive's content:
+
+```text
+vault: open in 6 ms (thread 4 ms, rows 1 ms, reader 1 ms; publish 0 ms, 100 rows)
+moonframe::perf: provider vault: published, 4 views ran in 9.8ms
+```
+
+`RUST_LOG=msgvault_moonframe=info,moonframe=info` shows them (on by default).
 
 ## Develop
 

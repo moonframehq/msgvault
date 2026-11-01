@@ -33,11 +33,17 @@ use {
         path::{Path, PathBuf},
         process::{Command, Stdio},
         sync::Arc,
+        time::{Duration, Instant},
     },
 };
 
 /// Rows published for one list.
-const ROWS: u64 = 400;
+const ROWS: u64 = 100;
+/// How long a row that arrived by a sync is marked `fresh`.
+const FRESH: Duration = Duration::from_secs(4);
+/// Ticks between reads of an archive whose changes can't be seen on disk
+/// (a daemon's): with a 2 s interval, every 30 s.
+const DAEMON_TICKS: u32 = 15;
 /// Messages with attachments read for the attachments browser.
 const FILE_MESSAGES: u64 = 200;
 /// The largest picture shown inline.
@@ -172,6 +178,9 @@ impl File {
 struct Archive {
     backend: Arc<dyn Backend>,
     sample: bool,
+    /// The database, when read directly: its files change as msgvault
+    /// syncs, which is cheap to watch.
+    database: Option<PathBuf>,
 }
 
 pub(crate) struct Vault {
@@ -191,6 +200,22 @@ pub(crate) struct Vault {
     real_labels: HashMap<String, String>,
     /// This install's secret for scrambling.
     key: crate::scramble::Key,
+    /// What was read, kept until what it depends on changes, so a click
+    /// runs only the queries it needs.
+    read: Cache,
+    /// How long the last snapshot's parts took.
+    clock: Clock,
+    /// The database's files as last read (see `signature`).
+    seen: Option<Vec<(u64, std::time::SystemTime)>>,
+    ticks: u32,
+    /// Rows that arrived by a sync, and when: the list shows them `fresh`
+    /// for a moment.
+    fresh: HashMap<i64, Instant>,
+    /// Pages of the list shown: "Show more" adds one.
+    pages: u64,
+    /// The list last shown, and its rows: what a sync's new rows are new to.
+    listed: Option<(String, i64, String)>,
+    shown: HashSet<i64>,
     notice: Option<Value>,
     notices: i64,
 }
@@ -215,20 +240,33 @@ impl Vault {
             thumb_failed: HashSet::new(),
             real_labels: HashMap::new(),
             key,
+            read: Cache::default(),
+            clock: Clock::default(),
+            seen: None,
+            ticks: 0,
+            fresh: HashMap::new(),
+            pages: 1,
+            listed: None,
+            shown: HashSet::new(),
             notice: None,
             notices: 0,
         }
     }
 
     fn open(&mut self) {
+        self.read = Cache::default();
         self.known.clear();
         self.files.clear();
         self.browser = None;
         let demo = std::env::var("MSGVAULT_DEMO").is_ok_and(|value| value == "1");
         let real = (!demo)
             .then(|| {
-                ArchiveLocation::load(ArchiveLocation::default_home())
-                    .and_then(|location| mv::open(&location, &BackendChoice::Auto))
+                ArchiveLocation::load(ArchiveLocation::default_home()).and_then(|location| {
+                    let backend = mv::open(&location, &BackendChoice::Auto)?;
+                    let database = (backend.describe().kind == BackendKind::Sqlite)
+                        .then(|| location.database_path());
+                    Ok((backend, database))
+                })
             })
             .and_then(|opened| {
                 opened
@@ -236,9 +274,10 @@ impl Vault {
                     .ok()
             });
         self.archive = match real {
-            Some(backend) => Ok(Archive {
+            Some((backend, database)) => Ok(Archive {
                 backend,
                 sample: false,
+                database,
             }),
             None => {
                 let dir = self.cache.join("demo");
@@ -248,10 +287,40 @@ impl Vault {
                     .map(|backend| Archive {
                         backend,
                         sample: true,
+                        database: Some(dir.join("msgvault.db")),
                     })
                     .map_err(|error| format!("No msgvault archive, and no demo one: {error}"))
             },
         };
+        self.seen = self.signature();
+    }
+
+    /// What the database's files look like (sizes and times), to tell
+    /// cheaply, without a query, that msgvault wrote to it.
+    fn signature(&self) -> Option<Vec<(u64, std::time::SystemTime)>> {
+        let database = self.archive.as_ref().ok()?.database.as_ref()?;
+        let files = [database.clone(), database.with_extension("db-wal")];
+        Some(
+            files
+                .iter()
+                .filter_map(|file| fs::metadata(file).ok())
+                .map(|meta| (meta.len(), meta.modified().unwrap_or(std::time::UNIX_EPOCH)))
+                .collect(),
+        )
+    }
+
+    /// Whether the archive changed since it was last read: its files on
+    /// disk, or for a daemon, every so often.
+    fn synced(&mut self) -> bool {
+        self.ticks += 1;
+        match self.signature() {
+            Some(now) => {
+                let changed = self.seen.as_ref() != Some(&now);
+                self.seen = Some(now);
+                changed
+            },
+            None => self.ticks.is_multiple_of(DAEMON_TICKS),
+        }
     }
 
     fn mask(&self) -> Mask {
@@ -266,11 +335,22 @@ impl Vault {
         self.notice = Some(json!({ "seq": self.notices, "ok": ok, "text": text.into() }));
     }
 
-    fn publish(&mut self, host: &Handle) {
-        match self.snapshot() {
-            Ok(value) => host.publish_json(&value),
-            Err(reason) => host.publish_json(&json!({ "available": false, "reason": reason })),
-        }
+    /// Publishes what the views show, and logs how long each part took:
+    /// one line per click, without any of the archive's content.
+    fn publish(&mut self, host: &Handle, why: &str) {
+        let started = Instant::now();
+        let value = self
+            .snapshot()
+            .unwrap_or_else(|reason| json!({ "available": false, "reason": reason }));
+        let built = started.elapsed();
+        host.publish_json(&value);
+        let rows = value["list"]["rows"].as_array().map_or(0, Vec::len);
+        tracing::info!(
+            "vault: {why} in {} ms ({}; publish {} ms, {rows} rows)",
+            started.elapsed().as_millis(),
+            self.clock.report(built),
+            (started.elapsed() - built).as_millis(),
+        );
     }
 
     fn backend(&self) -> Result<Arc<dyn Backend>, String> {
@@ -287,7 +367,17 @@ impl Vault {
         let now = Local::now();
         let fail = |error: mv::Error| error.to_string();
 
-        let accounts = backend.accounts().map_err(fail)?;
+        let mut clock = Clock {
+            last: Some(Instant::now()),
+            laps: Vec::new(),
+        };
+        if self.read.accounts.is_none() {
+            let accounts = backend.accounts().map_err(fail)?;
+            let stats = backend.stats().map_err(fail)?;
+            self.read.accounts = Some((accounts, stats));
+            clock.lap("accounts");
+        }
+        let (accounts, stats) = self.read.accounts.clone().unwrap_or_default();
         if !accounts
             .iter()
             .any(|account| account.id.0 == self.view.account)
@@ -297,8 +387,19 @@ impl Vault {
         let account = (self.view.account != 0).then_some(AccountId(self.view.account));
         let current = accounts.iter().find(|a| Some(a.id) == account);
 
-        let counts = backend.mailbox_counts(account).map_err(fail)?;
-        let labels = backend.labels(account).map_err(fail)?;
+        if self
+            .read
+            .sidebar
+            .as_ref()
+            .is_none_or(|(key, ..)| *key != account)
+        {
+            let counts = backend.mailbox_counts(account).map_err(fail)?;
+            clock.lap("counts");
+            let labels = backend.labels(account).map_err(fail)?;
+            clock.lap("labels");
+            self.read.sidebar = Some((account, counts, labels));
+        }
+        let (_, counts, labels) = self.read.sidebar.clone().unwrap_or_default();
         let colors: HashMap<&str, Option<&str>> = labels
             .iter()
             .map(|label| (label.name.as_str(), label.color.as_deref()))
@@ -368,19 +469,44 @@ impl Vault {
                 json!({ "title": "All Attachments", "subtitle": "", "rows": [] })
             },
             mailbox => {
-                let page = backend
-                    .messages(&MessageQuery {
-                        mailbox: mailbox.clone().unwrap_or_default(),
-                        account,
-                        search: (!query.is_empty()).then(|| query.clone()),
-                        offset: 0,
-                        limit: ROWS,
-                    })
-                    .map_err(fail)?;
-                let rows = by_conversation(page.messages);
-                for message in &rows {
-                    self.known.insert(message.id.0, message.clone());
+                let key = (self.view.mailbox.clone(), self.view.account, query.clone());
+                let same_list = self.listed.as_ref() == Some(&key);
+                if !same_list {
+                    self.pages = 1;
+                    self.fresh.clear();
                 }
+                if self
+                    .read
+                    .list
+                    .as_ref()
+                    .is_none_or(|(cached, ..)| *cached != key)
+                {
+                    let page = backend
+                        .messages(&MessageQuery {
+                            mailbox: mailbox.clone().unwrap_or_default(),
+                            account,
+                            search: (!query.is_empty()).then(|| query.clone()),
+                            offset: 0,
+                            limit: ROWS * self.pages,
+                        })
+                        .map_err(fail)?;
+                    let rows = by_conversation(page.messages);
+                    // Rows new to a list already shown came by a sync.
+                    if same_list && !self.shown.is_empty() {
+                        let arrived = Instant::now();
+                        for row in rows.iter().filter(|row| !self.shown.contains(&row.id.0)) {
+                            self.fresh.insert(row.id.0, arrived);
+                        }
+                    }
+                    self.shown = rows.iter().map(|row| row.id.0).collect();
+                    self.listed = Some(key.clone());
+                    for message in &rows {
+                        self.known.insert(message.id.0, message.clone());
+                    }
+                    self.read.list = Some((key.clone(), rows, page.has_more));
+                    clock.lap("list");
+                }
+                let (_, rows, has_more) = self.read.list.clone().unwrap_or_default();
                 let mut subtitle = if query.is_empty() {
                     format::plural(rows.len() as u64, "conversation", "conversations")
                 } else {
@@ -393,7 +519,7 @@ impl Vault {
                 if let Some(account) = current {
                     subtitle = format!("{subtitle} · {}", mask.name(account.title()));
                 }
-                if page.has_more {
+                if has_more {
                     subtitle.push('+');
                 }
                 json!({
@@ -408,25 +534,48 @@ impl Vault {
                         "Search".into()
                     },
                     "subtitle": subtitle,
-                    "rows": rows.iter().map(|m| row(m, now, &colors, mask)).collect::<Vec<_>>(),
+                    "key": format!("{:x}", list_key(&key, mask.on)),
+                    "more": has_more,
+                    "rows": rows
+                        .iter()
+                        .map(|m| {
+                            let mut row = row(m, now, &colors, mask);
+                            if self.fresh.contains_key(&m.id.0) {
+                                row["fresh"] = Value::Bool(true);
+                            }
+                            row
+                        })
+                        .collect::<Vec<_>>(),
                 })
             },
         };
+        clock.lap("rows");
 
-        let thread = match self.known.get(&self.view.open).cloned() {
-            Some(summary) => match backend.thread(&summary) {
-                Ok(thread) => Some(self.thread(&thread, &summary, &accounts, &colors)),
-                Err(error) => {
+        let open = self.view.open;
+        if open != 0 && self.read.thread.as_ref().is_none_or(|(id, _)| *id != open) {
+            self.read.thread = match self.known.get(&open).map(|summary| backend.thread(summary)) {
+                Some(Ok(thread)) => Some((open, thread)),
+                Some(Err(error)) => {
                     tracing::warn!(%error, "vault: cannot read the thread");
                     None
                 },
+                None => None,
+            };
+            clock.lap("thread");
+        }
+        let thread = match (self.read.thread.clone(), self.known.get(&open).cloned()) {
+            (Some((id, thread)), Some(summary)) if id == open => {
+                Some(self.thread(&thread, &summary, &accounts, &colors))
             },
-            None => None,
+            _ => None,
         };
+        clock.lap("reader");
         let files =
             (self.view.mailbox == "files" && query.is_empty()).then(|| self.browser(&backend, now));
-
-        let stats = backend.stats().map_err(fail)?;
+        if files.is_some() {
+            clock.lap("files");
+        }
+        self.clock = clock;
         let info = backend.describe();
         Ok(json!({
             "available": true,
@@ -957,6 +1106,10 @@ impl Vault {
         if text("scramble").as_deref() == Some("toggle") {
             self.view.scramble = !self.view.scramble;
         }
+        if flag("more") {
+            self.pages += 1;
+            self.read.list = None;
+        }
         if flag("refresh") {
             self.open();
         }
@@ -966,19 +1119,101 @@ impl Vault {
 
 impl Native for Vault {
     fn start(&mut self, host: &Handle) -> Result<(), String> {
+        let started = Instant::now();
         self.open();
-        self.publish(host);
+        tracing::info!(
+            "vault: opened the archive in {} ms",
+            started.elapsed().as_millis()
+        );
+        self.publish(host, "start");
         Ok(())
     }
 
     /// Every `interval` of provider.toml: the archive may have synced.
+    /// Every 2 s: when msgvault wrote to the archive, read it again (new
+    /// rows come in marked `fresh`); when a fresh mark ran out, say so.
     fn tick(&mut self, host: &Handle) {
-        self.publish(host);
+        if self.synced() {
+            self.read = Cache::default();
+            self.browser = None;
+            self.publish(host, "sync");
+            return;
+        }
+        let before = self.fresh.len();
+        self.fresh.retain(|_, arrived| arrived.elapsed() < FRESH);
+        if self.fresh.len() != before {
+            self.publish(host, "fresh");
+        }
     }
 
     fn receive(&mut self, host: &Handle, from: &str, message: Data) {
+        let why = message_name(&message);
         self.handle(from, &message);
-        self.publish(host);
+        self.publish(host, &why);
+    }
+}
+
+/// A short name for a list (mailbox, account, search, scrambled), for the
+/// views to key it by: a new list appears whole, rows of the same list
+/// arrive one by one.
+fn list_key(key: &(String, i64, String), scrambled: bool) -> u64 {
+    format!("{}\u{1f}{}\u{1f}{}\u{1f}{scrambled}", key.0, key.1, key.2)
+        .bytes()
+        .fold(0xcbf2_9ce4_8422_2325_u64, |hash, byte| {
+            (hash ^ u64::from(byte)).wrapping_mul(0x0100_0000_01b3)
+        })
+}
+
+/// What was read from the archive, by what it depends on.
+#[derive(Default)]
+struct Cache {
+    /// Every account, and the archive's totals.
+    accounts: Option<(Vec<Account>, mv::Stats)>,
+    /// The sidebar's counts and labels, for an account (or all).
+    sidebar: Option<(Option<AccountId>, mv::MailboxCounts, Vec<mv::Label>)>,
+    /// The list's rows, for a mailbox, an account and a search.
+    list: Option<((String, i64, String), Vec<MessageSummary>, bool)>,
+    /// The open thread, by the message opened.
+    thread: Option<(i64, mv::Thread)>,
+}
+
+/// How long each part of a snapshot took, for the log.
+#[derive(Default)]
+struct Clock {
+    last: Option<Instant>,
+    laps: Vec<(&'static str, Duration)>,
+}
+
+impl Clock {
+    fn lap(&mut self, part: &'static str) {
+        let now = Instant::now();
+        let since = self.last.map_or(Duration::ZERO, |last| now - last);
+        self.laps.push((part, since));
+        self.last = Some(now);
+    }
+
+    /// `list 12 ms, thread 3 ms`: the archive's reads and the work, with
+    /// what was taken from the cache left out.
+    fn report(&self, total: Duration) -> String {
+        let parts: Vec<String> = self
+            .laps
+            .iter()
+            .map(|(part, took)| format!("{part} {} ms", took.as_millis()))
+            .collect();
+        if parts.is_empty() {
+            format!("{} ms, all cached", total.as_millis())
+        } else {
+            parts.join(", ")
+        }
+    }
+}
+
+/// A message's name for the log: its keys, never its values.
+fn message_name(message: &Data) -> String {
+    match message {
+        Data::Map(entries) => entries.keys().cloned().collect::<Vec<_>>().join("+"),
+        Data::String(text) => text.clone(),
+        _ => "message".into(),
     }
 }
 
@@ -1167,7 +1402,9 @@ mod tests {
         vault.archive = Ok(Archive {
             backend: mv::open(&location, &BackendChoice::Sqlite).unwrap(),
             sample: true,
+            database: Some(data.join("msgvault.db")),
         });
+        vault.seen = vault.signature();
         (dir, vault)
     }
 
@@ -1375,6 +1612,85 @@ mod tests {
             real.len()
         );
         assert!(leaked.is_empty(), "shown while scrambled: {leaked:?}");
+    }
+
+    /// Writes a copy of the newest inbox message, dated now, as a sync
+    /// would; returns its id.
+    fn sync_one(vault: &Vault) -> i64 {
+        let database = vault.archive.as_ref().unwrap().database.clone().unwrap();
+        let db = rusqlite::Connection::open(database).unwrap();
+        let newest: i64 = db
+            .query_row(
+                "SELECT m.id FROM messages m JOIN message_labels ml ON ml.message_id = m.id
+                 JOIN labels l ON l.id = ml.label_id WHERE l.name = 'INBOX'
+                 ORDER BY m.sent_at DESC LIMIT 1",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        let columns: Vec<String> = db
+            .prepare("SELECT name FROM pragma_table_info('messages')")
+            .unwrap()
+            .query_map([], |row| row.get::<_, String>(0))
+            .unwrap()
+            .map(Result::unwrap)
+            .filter(|name| !matches!(name.as_str(), "id" | "sent_at" | "source_message_id"))
+            .map(|name| format!("\"{name}\""))
+            .collect();
+        let columns = columns.join(", ");
+        let id = 9_000_001;
+        db.execute_batch(&format!(
+            "INSERT INTO messages (id, sent_at, source_message_id, {columns})
+               SELECT {id}, datetime('now', '+1 minute'), 'synced', {columns} FROM messages WHERE id = {newest};
+             INSERT INTO message_labels (message_id, label_id)
+               SELECT {id}, label_id FROM message_labels WHERE message_id = {newest};"
+        ))
+        .unwrap();
+        id
+    }
+
+    #[test]
+    fn a_sync_is_seen_and_its_rows_come_in_fresh() {
+        let (_dir, mut vault) = demo();
+        let before = vault.snapshot().unwrap();
+        assert!(!vault.synced(), "nothing was written yet");
+        let id = sync_one(&vault);
+        assert!(vault.synced(), "the write was not seen");
+        vault.read = Cache::default();
+        let after = vault.snapshot().unwrap();
+        let first = &after["list"]["rows"][0];
+        assert_eq!(first["id"], id, "the synced message leads the inbox");
+        assert_eq!(first["fresh"], true);
+        assert_eq!(after["list"]["key"], before["list"]["key"], "the same list");
+        // Rows already shown are not fresh, and a new list has none.
+        assert!(after["list"]["rows"][1]["fresh"].is_null());
+        vault.handle("sidebar", &D::map([("mailbox", D::from("all"))]));
+        let other = vault.snapshot().unwrap();
+        assert!(
+            other["list"]["rows"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .all(|row| row["fresh"].is_null())
+        );
+    }
+
+    #[test]
+    fn show_more_reads_the_next_page() {
+        let (_dir, mut vault) = demo();
+        vault.handle("sidebar", &D::map([("mailbox", D::from("all"))]));
+        let first = vault.snapshot().unwrap()["list"]["rows"]
+            .as_array()
+            .unwrap()
+            .len();
+        assert!(first <= ROWS as usize);
+        vault.handle("list", &D::map([("more", D::from(true))]));
+        let more = vault.snapshot().unwrap()["list"]["rows"]
+            .as_array()
+            .unwrap()
+            .len();
+        assert!(more >= first);
+        assert_eq!(vault.pages, 2);
     }
 
     #[test]

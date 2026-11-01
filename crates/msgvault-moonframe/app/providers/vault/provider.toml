@@ -3,5 +3,5 @@
 # msgvault.db read-only ($MSGVAULT_HOME, else ~/.msgvault); without either
 # (or with MSGVAULT_DEMO=1), a generated demo archive.
 kind = "native"
-# Seconds between reads, so the window follows a sync.
-interval = 60.0
+# Seconds between looks at the archive's files: a sync shows within one.
+interval = 2.0
