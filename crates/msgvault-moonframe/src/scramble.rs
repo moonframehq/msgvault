@@ -9,6 +9,17 @@
 //! kept, so the layout looks as it did. Nothing real is kept: no word, no
 //! number, no domain.
 
+use {
+    sha2::{Digest, Sha256},
+    std::{
+        collections::hash_map::RandomState,
+        fs,
+        hash::{BuildHasher, Hasher},
+        io::Read,
+        path::Path,
+    },
+};
+
 const FIRST: [&str; 40] = [
     "Ada", "Bruno", "Clara", "Dmitri", "Elena", "Felix", "Greta", "Hugo", "Ines", "Jonas", "Keiko",
     "Liam", "Maya", "Nico", "Olga", "Pablo", "Quinn", "Rosa", "Sven", "Tara", "Uma", "Victor",
@@ -100,20 +111,58 @@ const WORDS: [&[&str]; 9] = [
     ],
 ];
 
-fn hash(text: &str) -> u64 {
-    text.bytes().fold(0xcbf2_9ce4_8422_2325_u64, |hash, byte| {
-        (hash ^ u64::from(byte)).wrapping_mul(0x0100_0000_01b3)
-    })
+/// A keyed hash: SHA-256 of this install's secret and `text`. Without
+/// the secret, which never leaves this machine, nobody can work out what a
+/// made-up name stands for, nor check a guess against a screenshot.
+fn hash(key: &Key, text: &str) -> u64 {
+    let digest = Sha256::new()
+        .chain_update(key)
+        .chain_update(text.as_bytes())
+        .finalize();
+    let mut first = [0_u8; 8];
+    first.copy_from_slice(&digest[..8]);
+    u64::from_le_bytes(first)
+}
+
+/// This install's secret for [`hash`].
+pub(crate) type Key = [u8; 32];
+
+/// The secret kept in `file`, made the first time: random bytes from the
+/// system (`/dev/urandom`), else from the process's own random hasher keys.
+pub(crate) fn key(file: &Path) -> Key {
+    if let Ok(bytes) = fs::read(file)
+        && let Ok(key) = Key::try_from(bytes.as_slice())
+    {
+        return key;
+    }
+    let mut key = [0_u8; 32];
+    let random = fs::File::open("/dev/urandom").and_then(|mut source| source.read_exact(&mut key));
+    if random.is_err() {
+        for (index, chunk) in key.chunks_mut(8).enumerate() {
+            let mut hasher = RandomState::new().build_hasher();
+            hasher.write_usize(index);
+            chunk.copy_from_slice(&hasher.finish().to_le_bytes());
+        }
+    }
+    let kept = file
+        .parent()
+        .map_or(Ok(()), fs::create_dir_all)
+        .and_then(|()| fs::write(file, key));
+    if let Err(error) = kept {
+        tracing::warn!(%error, "scramble: cannot keep the secret; names change next launch");
+    }
+    key
 }
 
 fn pick<'a>(list: &[&'a str], seed: u64) -> &'a str {
     list[(seed % list.len() as u64) as usize]
 }
 
-/// Whether to scramble, and how.
+/// Whether to scramble, and with which secret.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(crate) struct Mask {
     pub(crate) on: bool,
+    pub(crate) key: Key,
 }
 
 impl Mask {
@@ -128,7 +177,7 @@ impl Mask {
         if name.chars().any(|c| c.is_ascii_digit()) && !name.chars().any(char::is_alphabetic) {
             return self.text(name);
         }
-        let seed = hash(&name.trim().to_lowercase());
+        let seed = hash(&self.key, &name.trim().to_lowercase());
         format!("{} {}", pick(&FIRST, seed), pick(&LAST, seed >> 20))
     }
 
@@ -141,7 +190,7 @@ impl Mask {
         let Some((local, _)) = address.split_once('@') else {
             return self.text(address);
         };
-        let seed = hash(&address.trim().to_lowercase());
+        let seed = hash(&self.key, &address.trim().to_lowercase());
         let first = pick(&FIRST, seed).to_lowercase();
         let last = pick(&LAST, seed >> 20).to_lowercase();
         let local = if local.contains('.') {
@@ -162,7 +211,7 @@ impl Mask {
             return self.address(address);
         }
         let made = self.name(name).to_lowercase().replace(' ', ".");
-        let seed = hash(&address.trim().to_lowercase());
+        let seed = hash(&self.key, &address.trim().to_lowercase());
         format!("{made}@{}", pick(&DOMAINS, seed >> 40))
     }
 
@@ -176,7 +225,7 @@ impl Mask {
         let mut word = String::new();
         let flush = |word: &mut String, out: &mut String| {
             if !word.is_empty() {
-                out.push_str(&swap(word));
+                out.push_str(&swap(&self.key, word));
                 word.clear();
             }
         };
@@ -187,7 +236,7 @@ impl Mask {
             }
             flush(&mut word, &mut out);
             if let Some(digit) = c.to_digit(10) {
-                let seed = hash(&format!("{}{}", out.len(), digit));
+                let seed = hash(&self.key, &format!("{}{}", out.len(), digit));
                 out.push(char::from(b'0' + (seed % 10) as u8));
             } else {
                 out.push(c);
@@ -203,7 +252,7 @@ impl Mask {
             return label.to_owned();
         }
         let mut words = label.split('/').map(|part| {
-            let word = swap(part);
+            let word = swap(&self.key, part);
             let mut chars = word.chars();
             chars
                 .next()
@@ -232,13 +281,13 @@ impl Mask {
 }
 
 /// A made-up word for `word`, about as long, with its first capital kept.
-fn swap(word: &str) -> String {
+fn swap(key: &Key, word: &str) -> String {
     // A reply or forward still reads as one.
     if matches!(word.to_lowercase().as_str(), "re" | "fwd" | "fw") {
         return word.to_owned();
     }
     let length = word.chars().count();
-    let seed = hash(&word.to_lowercase());
+    let seed = hash(key, &word.to_lowercase());
     let made = if length <= WORDS.len() {
         // Never the word itself, should the list happen to have it.
         let words = WORDS[length - 1];
@@ -274,10 +323,14 @@ fn swap(word: &str) -> String {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests {
     use super::*;
 
-    const ON: Mask = Mask { on: true };
+    const ON: Mask = Mask {
+        on: true,
+        key: [7; 32],
+    };
 
     #[test]
     fn off_changes_nothing() {
@@ -323,6 +376,26 @@ mod tests {
             address.starts_with(&name.to_lowercase().replace(' ', ".")),
             "{name} {address}"
         );
+    }
+
+    #[test]
+    fn another_secret_gives_other_names() {
+        let other = Mask {
+            on: true,
+            key: [8; 32],
+        };
+        let names = ["Ada Lovelace", "Priya Raman", "Alan Turing", "Grace Hopper"];
+        assert!(names.iter().any(|name| ON.name(name) != other.name(name)));
+        assert_ne!(ON.text("1234567890"), other.text("1234567890"));
+    }
+
+    #[test]
+    fn the_secret_is_made_once_and_kept() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("scramble.key");
+        let made = key(&file);
+        assert_ne!(made, [0; 32]);
+        assert_eq!(key(&file), made);
     }
 
     #[test]

@@ -189,6 +189,8 @@ pub(crate) struct Vault {
     /// While scrambled, labels go out under made-up names: the real one
     /// for each, to read the views' messages.
     real_labels: HashMap<String, String>,
+    /// This install's secret for scrambling.
+    key: crate::scramble::Key,
     notice: Option<Value>,
     notices: i64,
 }
@@ -201,6 +203,8 @@ impl Vault {
             .or_else(|| std::env::var_os("HOME").map(|home| Path::new(&home).join(".cache")))
             .unwrap_or_else(std::env::temp_dir)
             .join(crate::NAME);
+        // Beside the cache, never in the views: what scrambling is keyed by.
+        let key = crate::scramble::key(&cache.join("scramble.key"));
         Self {
             archive: Err("Not opened yet".into()),
             view: View::read(&cache.join("view.json")),
@@ -210,6 +214,7 @@ impl Vault {
             browser: None,
             thumb_failed: HashSet::new(),
             real_labels: HashMap::new(),
+            key,
             notice: None,
             notices: 0,
         }
@@ -252,6 +257,7 @@ impl Vault {
     fn mask(&self) -> Mask {
         Mask {
             on: self.view.scramble,
+            key: self.key,
         }
     }
 
@@ -379,8 +385,9 @@ impl Vault {
                     format::plural(rows.len() as u64, "conversation", "conversations")
                 } else {
                     format!(
-                        "{} for “{query}”",
-                        format::plural(rows.len() as u64, "result", "results")
+                        "{} for “{}”",
+                        format::plural(rows.len() as u64, "result", "results"),
+                        mask.text(&query)
                     )
                 };
                 if let Some(account) = current {
@@ -432,7 +439,13 @@ impl Vault {
             } else {
                 "SQLite"
             },
-            "location": if sample { "demo archive".to_owned() } else { tilde(&info.location) },
+            "location": if sample {
+                "demo archive".to_owned()
+            } else if mask.on {
+                String::new()
+            } else {
+                tilde(&info.location)
+            },
             "stats": {
                 "messages": format::plural(stats.total_messages, "message", "messages"),
                 "threads": format::plural(stats.total_threads, "thread", "threads"),
@@ -820,9 +833,12 @@ impl Vault {
             return self.tell(false, "That attachment is no longer in the archive");
         };
         let name = format::safe_filename(&file.attachment.filename, "attachment");
+        // What the notice says: scrambled, the file's made-up name.
+        let mask = self.mask();
+        let said = mask.file(&name);
         if let Some(url) = file.attachment.remote_url() {
             system_open(&[url]);
-            return self.tell(true, format!("Opened {name} in the browser"));
+            return self.tell(true, format!("Opened {said} in the browser"));
         }
         let bytes = match self.backend().and_then(|backend| {
             backend
@@ -830,7 +846,9 @@ impl Vault {
                 .map_err(|error| error.to_string())
         }) {
             Ok(bytes) => bytes,
-            Err(error) => return self.tell(false, format!("Can't open {name}: {error}")),
+            Err(error) => {
+                return self.tell(false, format!("Can't open {said}: {}", mask.text(&error)));
+            },
         };
         let path = if save {
             let dir = std::env::var_os("MSGVAULT_DOWNLOADS")
@@ -851,10 +869,14 @@ impl Vault {
         if let Err(error) = written {
             return self.tell(
                 false,
-                format!(
-                    "Can't write {}: {error}",
-                    tilde(&path.display().to_string())
-                ),
+                if mask.on {
+                    format!("Can't write {said}: {error}")
+                } else {
+                    format!(
+                        "Can't write {}: {error}",
+                        tilde(&path.display().to_string())
+                    )
+                },
             );
         }
         let shown = path.display().to_string();
@@ -866,11 +888,11 @@ impl Vault {
                 .file_name()
                 .map(|n| n.to_string_lossy().into_owned())
                 .unwrap_or(name);
-            self.tell(true, format!("Saved {saved} to Downloads"));
+            self.tell(true, format!("Saved {} to Downloads", mask.file(&saved)));
         } else {
             quarantine(&path);
             system_open(&[&shown]);
-            self.tell(true, format!("Opened {name}"));
+            self.tell(true, format!("Opened {said}"));
         }
     }
 
