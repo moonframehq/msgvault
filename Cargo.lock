@@ -4626,7 +4626,7 @@ dependencies = [
 [[package]]
 name = "moonframe"
 version = "0.1.0"
-source = "git+https://github.com/penso/moonframe?rev=00387b5a7a995479cb546e5b7f6ef1156bc7a34c#00387b5a7a995479cb546e5b7f6ef1156bc7a34c"
+source = "git+https://github.com/penso/moonframe?rev=ad0a7aa478792f3276c97d9860a917d54b9b2371#ad0a7aa478792f3276c97d9860a917d54b9b2371"
 dependencies = [
  "block2 0.6.2",
  "futures",
@@ -4650,12 +4650,13 @@ dependencies = [
  "toml 1.1.8+spec-1.1.0",
  "tracing",
  "tracing-subscriber",
+ "ureq",
 ]
 
 [[package]]
 name = "moonframe-acp"
 version = "0.1.0"
-source = "git+https://github.com/penso/moonframe?rev=00387b5a7a995479cb546e5b7f6ef1156bc7a34c#00387b5a7a995479cb546e5b7f6ef1156bc7a34c"
+source = "git+https://github.com/penso/moonframe?rev=ad0a7aa478792f3276c97d9860a917d54b9b2371#ad0a7aa478792f3276c97d9860a917d54b9b2371"
 dependencies = [
  "agent-client-protocol-schema",
  "moonframe-core",
@@ -4668,7 +4669,7 @@ dependencies = [
 [[package]]
 name = "moonframe-core"
 version = "0.1.0"
-source = "git+https://github.com/penso/moonframe?rev=00387b5a7a995479cb546e5b7f6ef1156bc7a34c#00387b5a7a995479cb546e5b7f6ef1156bc7a34c"
+source = "git+https://github.com/penso/moonframe?rev=ad0a7aa478792f3276c97d9860a917d54b9b2371#ad0a7aa478792f3276c97d9860a917d54b9b2371"
 dependencies = [
  "mlua",
  "thiserror 2.0.21",
@@ -4678,7 +4679,7 @@ dependencies = [
 [[package]]
 name = "moonframe-mux"
 version = "0.1.0"
-source = "git+https://github.com/penso/moonframe?rev=00387b5a7a995479cb546e5b7f6ef1156bc7a34c#00387b5a7a995479cb546e5b7f6ef1156bc7a34c"
+source = "git+https://github.com/penso/moonframe?rev=ad0a7aa478792f3276c97d9860a917d54b9b2371#ad0a7aa478792f3276c97d9860a917d54b9b2371"
 dependencies = [
  "moonframe-terminal",
  "serde_json",
@@ -4688,7 +4689,7 @@ dependencies = [
 [[package]]
 name = "moonframe-providers"
 version = "0.1.0"
-source = "git+https://github.com/penso/moonframe?rev=00387b5a7a995479cb546e5b7f6ef1156bc7a34c#00387b5a7a995479cb546e5b7f6ef1156bc7a34c"
+source = "git+https://github.com/penso/moonframe?rev=ad0a7aa478792f3276c97d9860a917d54b9b2371#ad0a7aa478792f3276c97d9860a917d54b9b2371"
 dependencies = [
  "moonframe-core",
  "serde",
@@ -4705,7 +4706,7 @@ dependencies = [
 [[package]]
 name = "moonframe-store"
 version = "0.1.0"
-source = "git+https://github.com/penso/moonframe?rev=00387b5a7a995479cb546e5b7f6ef1156bc7a34c#00387b5a7a995479cb546e5b7f6ef1156bc7a34c"
+source = "git+https://github.com/penso/moonframe?rev=ad0a7aa478792f3276c97d9860a917d54b9b2371#ad0a7aa478792f3276c97d9860a917d54b9b2371"
 dependencies = [
  "moonframe-core",
  "rusqlite",
@@ -4717,7 +4718,7 @@ dependencies = [
 [[package]]
 name = "moonframe-terminal"
 version = "0.1.0"
-source = "git+https://github.com/penso/moonframe?rev=00387b5a7a995479cb546e5b7f6ef1156bc7a34c#00387b5a7a995479cb546e5b7f6ef1156bc7a34c"
+source = "git+https://github.com/penso/moonframe?rev=ad0a7aa478792f3276c97d9860a917d54b9b2371#ad0a7aa478792f3276c97d9860a917d54b9b2371"
 dependencies = [
  "alacritty_terminal",
  "portable-pty",

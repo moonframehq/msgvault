@@ -59,6 +59,13 @@ The macOS bundle also holds them in `Contents/Resources`, with the toolbox's
 Wasm providers prebuilt; the Linux and Windows archives build none, as the
 app only runs native providers.
 
+These names are what the app's **Check for Updates…** looks for
+(Moonframe's updater, `.updates("penso/msgvault-moonframe")` in `main.rs`):
+an installed copy checks the newest published release once a day. On macOS
+it installs the disk image after checking it against `SHA256SUMS`, its
+bundle id and, when signed with a Developer ID, its team; elsewhere it opens
+the download. Drafts and pre-releases are never offered.
+
 ## Verifying a download
 
 ```sh
