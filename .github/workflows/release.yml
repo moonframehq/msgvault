@@ -84,20 +84,20 @@ jobs:
           done
           printf 'sha=%s\nversion=%s\n' "$EXPECTED_SHA" "$version" >> "$GITHUB_OUTPUT"
           echo "Releasing v$version from $EXPECTED_SHA"
-      # Developer ID signing is on once MACOS_SIGNING_IDENTITY is set (with
-      # the release environment's secrets, see docs/releasing.md). Until then
-      # the disk image ships signed ad hoc, and Gatekeeper asks users to
-      # approve it on first launch.
+      # Developer ID signing (MACOS_SIGNING_IDENTITY with the release
+      # environment's secrets, see docs/releasing.md) is required: the app
+      # installs its own updates, and holds them to the signing team of the
+      # running copy. An ad hoc build names no team, so the copies installed
+      # from it would accept an update signed by anyone.
       - id: macos-signing
         env:
           MACOS_SIGNING_IDENTITY: ${{ vars.MACOS_SIGNING_IDENTITY }}
         run: |
-          if [[ -n "$MACOS_SIGNING_IDENTITY" ]]; then
-            echo "signed=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "signed=false" >> "$GITHUB_OUTPUT"
-            echo "::warning::MACOS_SIGNING_IDENTITY is not set: the macOS disk image ships without Developer ID signing or notarization"
+          if [[ "$MACOS_SIGNING_IDENTITY" != 'Developer ID Application: '* ]]; then
+            echo "::error::MACOS_SIGNING_IDENTITY is not a Developer ID Application identity: refusing to release an app that updates itself without one"
+            exit 1
           fi
+          echo "signed=true" >> "$GITHUB_OUTPUT"
       # Authenticode signing (Azure Artifact Signing) is on once
       # WINDOWS_SIGNING_SUBJECT is set, see docs/releasing.md. Until then the
       # zip's executable is unsigned and SmartScreen warns on first launch.

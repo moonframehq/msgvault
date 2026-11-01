@@ -28,9 +28,9 @@ The workflow then:
 2. builds every package (`package.yml`) and the CycloneDX SBOMs, while it
    waits for CI to pass on that same commit; nothing below runs until it has;
 3. signs msgvault.app with the Developer ID, notarizes and staples it, and builds
-   the disk image around it, signed, notarized and stapled too; and signs
-   the Windows executable with Authenticode (each when its signing is set
-   up, see below);
+   the disk image around it, signed, notarized and stapled too (required:
+   without a Developer ID the release fails, see below); and signs the
+   Windows executable with Authenticode when its signing is set up;
 4. writes `SHA256SUMS`, signs every file with Sigstore (keyless, as this
    workflow), and records GitHub attestations of SLSA build provenance and
    of the SBOM for every file;
@@ -79,22 +79,24 @@ cosign verify-blob msgvault-moonframe-<v>-universal-apple-darwin.dmg \
 
 ## Setting up macOS signing
 
-Without it, releases still publish, but the disk image's app is signed ad
-hoc: Gatekeeper refuses to open it until the user allows it in System
-Settings → Privacy & Security. To sign and notarize, add to the `release`
-environment:
+A release requires it: the workflow fails before building anything when
+`MACOS_SIGNING_IDENTITY` is not a Developer ID Application identity. The app
+installs its own updates and holds each one to the signing team of the
+running copy; an app signed ad hoc names no team, so the copies installed
+from it would accept an update signed by anyone. To sign and notarize, add
+to the `release` environment:
 
 | Name | Kind | Value |
 | --- | --- | --- |
-| `MACOS_SIGNING_IDENTITY` | variable | `Developer ID Application: Name (TEAMID)`; setting it turns signing on |
+| `MACOS_SIGNING_IDENTITY` | variable | `Developer ID Application: Name (TEAMID)` |
 | `MACOS_CERTIFICATE_P12_BASE64` | secret | the Developer ID Application certificate and key, exported as .p12, base64 |
 | `MACOS_CERTIFICATE_PASSWORD` | secret | that .p12's password |
 | `APPLE_API_KEY_ID` | variable | an App Store Connect API key's ID, for notarization |
 | `APPLE_API_ISSUER_ID` | variable | its issuer ID |
 | `APPLE_API_PRIVATE_KEY` | secret | its `.p8` contents |
 
-`MACOS_SIGNING_IDENTITY` is read outside the environment too, to decide
-whether to sign, so set it as a repository variable as well.
+`MACOS_SIGNING_IDENTITY` is read outside the environment too, to check it
+before anything is built, so set it as a repository variable as well.
 
 The app runs under the hardened runtime with the entitlements in
 `assets/macos/msgvault.entitlements`: wasmtime compiles the toolbox's Wasm providers
