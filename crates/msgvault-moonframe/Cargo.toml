@@ -1,0 +1,23 @@
+[package]
+description            = "A msgvault reader whose window is laid out by Moonframe"
+edition.workspace      = true
+license.workspace      = true
+name                   = "msgvault-moonframe"
+publish.workspace      = true
+repository.workspace   = true
+rust-version.workspace = true
+version.workspace      = true
+
+[lints]
+workspace = true
+
+[dependencies]
+chrono.workspace        = true
+moonframe.workspace     = true
+msgvault-core.workspace = true
+regex.workspace         = true
+serde_json.workspace    = true
+tracing.workspace       = true
+
+[dev-dependencies]
+tempfile.workspace = true

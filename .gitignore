@@ -1,0 +1,43 @@
+# Build output
+/target/
+**/*.rs.bk
+*.pdb
+
+# Generated archives: `just fixture` and ad-hoc copies of real msgvault data.
+# A real archive holds private mail, so never commit one.
+/demo-archive/
+/archive/
+*.db
+*.db-shm
+*.db-wal
+*.db-journal
+*.mvpack
+
+# Ad-hoc screenshots; the README images live in docs/screenshots/.
+/*.png
+
+# Profiling and coverage
+*.profraw
+*.profdata
+/lcov.info
+/coverage/
+flamegraph.svg
+perf.data*
+
+# Local configuration and secrets
+.env
+.env.*
+.envrc
+.direnv/
+mise.local.toml
+*.pem
+*.key
+*.p12
+
+# Editors and OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+*~

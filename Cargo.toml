@@ -1,0 +1,53 @@
+[workspace]
+default-members = ["crates/msgvault-moonframe"]
+members         = ["crates/msgvault-core", "crates/msgvault-moonframe"]
+resolver        = "2"
+
+[workspace.package]
+edition      = "2024"
+license      = "MIT"
+publish      = false
+repository   = "https://github.com/penso/msgvault-moonframe"
+rust-version = "1.99"
+version      = "0.1.0"
+
+[workspace.lints.rust]
+unsafe_code           = "deny"
+unused_qualifications = "deny"
+
+[workspace.lints.clippy]
+expect_used = "deny"
+unwrap_used = "deny"
+
+[workspace.dependencies]
+anyhow      = "1"
+chrono      = { default-features = false, features = ["clock", "std"], version = "0.4" }
+flate2      = "1"
+mail-parser = "0.11"
+regex       = "1"
+# The window, laid out by app/ in Luau. Pinned to one commit of the public
+# repository; to work on both, patch it to a checkout:
+#   [patch."https://github.com/penso/moonframe"]
+#   moonframe = { path = "../moonframe/crates/moonframe" }
+moonframe     = { default-features = false, features = ["acp", "alacritty", "docs", "git", "tokio"], git = "https://github.com/penso/moonframe", rev = "c1797a79d021eb3c83008a2519b15bf4a2af2731" }
+msgvault-core = { path = "crates/msgvault-core" }
+rusqlite      = { features = ["bundled"], version = "0.41" }
+serde         = { features = ["derive"], version = "1" }
+serde_json    = "1"
+sha2          = "0.11"
+tempfile      = "3"
+thiserror     = "2"
+toml          = "1"
+tracing       = "0.1"
+ureq          = { features = ["json"], version = "3" }
+urlencoding   = "2"
+zstd          = "0.14"
+
+[profile.dev.package."*"]
+# GPUI, Luau and SQLite are unusably slow unoptimised; keep our own crates
+# debuggable.
+opt-level = 2
+
+[profile.release]
+codegen-units = 16
+lto           = "thin"

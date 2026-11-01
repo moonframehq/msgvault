@@ -1,0 +1,7 @@
+# msgvault's archive, shared as `app.vault`: the native provider in
+# src/vault.rs, on msgvault-core. A running `msgvault serve` first, else
+# msgvault.db read-only ($MSGVAULT_HOME, else ~/.msgvault); without either
+# (or with MSGVAULT_DEMO=1), a generated demo archive.
+kind = "native"
+# Seconds between reads, so the window follows a sync.
+interval = 60.0

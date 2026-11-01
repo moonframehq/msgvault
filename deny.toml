@@ -1,0 +1,72 @@
+# cargo-deny configuration. Run locally with `just deny` (`cargo deny check`).
+#
+# Evaluate every target GPUI supports: both macOS architectures, x86_64/ARM64
+# GNU/Linux and x86_64/ARM64 Windows.
+
+[graph]
+all-features = true
+targets = [
+  "aarch64-apple-darwin",
+  "aarch64-pc-windows-msvc",
+  "aarch64-unknown-linux-gnu",
+  "x86_64-apple-darwin",
+  "x86_64-pc-windows-msvc",
+  "x86_64-unknown-linux-gnu",
+]
+
+[advisories]
+version = 2
+yanked  = "deny"
+# Security vulnerabilities always fail. "Unmaintained" is scoped to crates this
+# workspace depends on directly: GPUI's own tree carries discontinued crates
+# that we cannot act on without changing the pinned gpui-kit version.
+ignore = [
+  { id = "RUSTSEC-2026-0391", reason = "zstd 0.13 only via Moonframe's wasmtime compilation cache, which is never enabled; msgvault-core uses zstd 0.14" },
+  { id = "RUSTSEC-2026-0398", reason = "zstd 0.13 only via Moonframe's wasmtime compilation cache, which is never enabled; msgvault-core uses zstd 0.14" },
+  { id = "RUSTSEC-2026-0403", reason = "zstd 0.13 only via Moonframe's wasmtime compilation cache, which is never enabled; msgvault-core uses zstd 0.14" },
+]
+unmaintained = "workspace"
+
+[licenses]
+allow = [
+  "0BSD",
+  "Apache-2.0 WITH LLVM-exception",
+  "Apache-2.0",
+  "BSD-2-Clause",
+  "BSD-3-Clause",
+  "BSL-1.0",
+  "CC0-1.0",
+  # Mozilla's CA root certificate set, via webpki-roots <- ureq. CDLA-Permissive
+  # is a data licence covering the certificate list rather than code; it imposes
+  # no obligation on a binary that embeds it.
+  "CDLA-Permissive-2.0",
+  "ISC",
+  "MIT",
+  "MIT-0",
+  "MPL-2.0",
+  "Unicode-3.0",
+  "Unlicense",
+  "Zlib",
+]
+confidence-threshold = 0.9
+version = 2
+
+# The bzip2 licence is a permissive BSD-style licence. It reaches the build only
+# through GPUI's HTTP client (gpui-pre-http-client -> async-compression -> bzip2),
+# so it is allowed for that crate alone rather than workspace-wide.
+[[licenses.exceptions]]
+allow = ["bzip2-1.0.6"]
+crate = "libbz2-rs-sys"
+
+[bans]
+multiple-versions = "warn"
+wildcards         = "deny"
+# The workspace pins gpui-kit (and so GPUI) to an exact version on purpose.
+allow-wildcard-paths = true
+
+[sources]
+# Moonframe and the herdr-gpui crates it uses, pinned by rev in Cargo.toml.
+allow-git        = ["https://github.com/penso/herdr-gpui", "https://github.com/penso/moonframe"]
+allow-registry   = ["https://github.com/rust-lang/crates.io-index"]
+unknown-git      = "deny"
+unknown-registry = "deny"

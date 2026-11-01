@@ -1,0 +1,61 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# Deny by default; every job below declares the scopes it actually needs.
+permissions: {}
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  # Matches `nightly_toolchain` in the justfile: rustfmt.toml uses unstable options.
+  NIGHTLY: nightly-2026-06-20
+
+jobs:
+  format:
+    name: Format
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install nightly rustfmt
+        run: rustup toolchain install "$NIGHTLY" --profile minimal --component rustfmt
+      - uses: taiki-e/install-action@8cca0918f8471c33515202b73f56ab27f2bed283 # v2.87.29
+        with:
+          tool: taplo
+      - name: Check Rust formatting
+        run: cargo "+$NIGHTLY" fmt --all -- --check
+      - name: Check TOML formatting
+        run: taplo fmt --check
+
+  build:
+    name: Build, lint and test
+    # Moonframe's window needs macOS for now, as its own CI does.
+    runs-on: macos-15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install pinned Rust toolchain
+        run: rustup show
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+      - name: Check the lockfile is current
+        run: cargo fetch --locked
+      - name: Clippy (all targets)
+        run: cargo clippy --locked --workspace --all-targets -- -D warnings
+      - name: Test
+        run: cargo test --locked --workspace
+      - name: Load the app headlessly (demo archive)
+        run: MSGVAULT_DEMO=1 cargo run --locked -- --check
