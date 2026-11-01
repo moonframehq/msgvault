@@ -1554,7 +1554,12 @@ mod tests {
         for text in texts {
             into.extend(
                 text.split(|c: char| !c.is_alphanumeric())
-                    .filter(|word| word.chars().count() >= 3)
+                    // Random replacement digits can coincide with numbers
+                    // elsewhere in the archive. Compare words here; numeric
+                    // scrambling is covered by scramble's keyed text tests.
+                    .filter(|word| {
+                        word.chars().count() >= 3 && word.chars().any(char::is_alphabetic)
+                    })
                     .map(str::to_lowercase),
             );
         }
