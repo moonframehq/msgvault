@@ -24,7 +24,7 @@ ammonia     = "4"
 anyhow      = "1"
 chrono      = { default-features = false, features = ["clock", "std"], version = "0.4" }
 flate2      = "1"
-mail-parser = "0.11"
+mail-parser = "1.0"
 regex       = "1"
 # The window, laid out by app/ in Luau. Pinned to one commit of the public
 # repository; to work on both, patch it to a checkout:
