@@ -1276,6 +1276,107 @@ mod tests {
         assert!(!listed["list"]["rows"].as_array().unwrap().is_empty());
     }
 
+    /// The words of everything the archive's people wrote or are called,
+    /// as published: who, subjects, text, files, labels and accounts.
+    fn content_words(snapshot: &Value, into: &mut BTreeSet<String>) {
+        let mut texts: Vec<String> = Vec::new();
+        let strings = |value: &Value, keys: &[&str], texts: &mut Vec<String>| {
+            for key in keys {
+                if let Some(text) = value[*key].as_str() {
+                    texts.push(text.to_owned());
+                }
+            }
+        };
+        let each = |value: &Value| value.as_array().cloned().unwrap_or_default();
+        let rows = each(&snapshot["list"]["rows"]);
+        let labels = each(&snapshot["labels"]);
+        let accounts = each(&snapshot["accounts"]);
+        let messages = each(&snapshot["thread"]["messages"]);
+        let files: Vec<Value> = messages.iter().flat_map(|m| each(&m["files"])).collect();
+        for row in &rows {
+            strings(row, &["title", "subject", "snippet"], &mut texts);
+        }
+        for label in &labels {
+            strings(label, &["name", "title"], &mut texts);
+        }
+        for account in &accounts {
+            strings(account, &["title", "identifier"], &mut texts);
+        }
+        for message in &messages {
+            strings(
+                message,
+                &["from", "address", "to", "cc", "snippet", "body"],
+                &mut texts,
+            );
+        }
+        for file in &files {
+            strings(file, &["name", "from", "subject"], &mut texts);
+        }
+        strings(&snapshot["thread"], &["subject"], &mut texts);
+        strings(&snapshot["header"], &["title", "subtitle"], &mut texts);
+        for text in texts {
+            into.extend(
+                text.split(|c: char| !c.is_alphanumeric())
+                    .filter(|word| word.chars().count() >= 3)
+                    .map(str::to_lowercase),
+            );
+        }
+    }
+
+    #[test]
+    fn a_scrambled_screen_shows_no_word_of_the_archive() {
+        let (_dir, mut vault) = demo();
+        vault.handle("sidebar", &D::map([("mailbox", D::from("all"))]));
+        let ids: Vec<i64> = vault.snapshot().unwrap()["list"]["rows"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(|row| row["id"].as_i64())
+            .collect();
+        assert!(ids.len() > 20, "the demo archive has mail");
+        let (mut real, mut shown) = (BTreeSet::new(), BTreeSet::new());
+        for scramble in [false, true] {
+            if scramble {
+                vault.handle("titlebar", &D::map([("scramble", D::from("toggle"))]));
+            }
+            for id in &ids {
+                vault.handle("list", &D::map([("open", D::from(*id))]));
+                let snapshot = vault.snapshot().unwrap();
+                content_words(
+                    &snapshot,
+                    if scramble {
+                        &mut shown
+                    } else {
+                        &mut real
+                    },
+                );
+            }
+        }
+        // What may show: the made-up words, the app's own (a source's
+        // kind, "no subject", "All Accounts"), and a file's extension,
+        // kept so it still reads as its type.
+        let allowed: BTreeSet<String> = crate::scramble::vocabulary()
+            .chain(
+                [
+                    "all", "accounts", "sources", "subject", "gmail", "imap", "whatsapp", "slack",
+                    "calendar", "imessage", "email", "unknown", "fwd", "pdf", "png", "jpg", "jpeg",
+                    "csv", "ics", "txt", "zip", "doc", "docx",
+                ]
+                .map(str::to_owned),
+            )
+            .collect();
+        let leaked: Vec<&String> = real
+            .intersection(&shown)
+            .filter(|word| !allowed.contains(*word))
+            .collect();
+        assert!(
+            real.len() > 200,
+            "the demo archive has {} words",
+            real.len()
+        );
+        assert!(leaked.is_empty(), "shown while scrambled: {leaked:?}");
+    }
+
     #[test]
     fn folds_a_conversation_into_its_newest_row() {
         let message = |id, conversation, unread| MessageSummary {

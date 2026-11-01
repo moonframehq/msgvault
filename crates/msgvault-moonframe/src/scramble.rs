@@ -111,6 +111,19 @@ const WORDS: [&[&str]; 9] = [
     ],
 ];
 
+/// Every word scrambling makes up, lowercased: what a scrambled screen
+/// may show besides the app's own words.
+#[cfg(test)]
+pub(crate) fn vocabulary() -> impl Iterator<Item = String> {
+    FIRST
+        .iter()
+        .chain(LAST.iter())
+        .chain(WORDS.iter().flat_map(|words| words.iter()))
+        .chain(DOMAINS.iter())
+        .flat_map(|word| word.split(['.', '-']))
+        .map(str::to_lowercase)
+}
+
 /// A keyed hash: SHA-256 of this install's secret and `text`. Without
 /// the secret, which never leaves this machine, nobody can work out what a
 /// made-up name stands for, nor check a guess against a screenshot.
@@ -288,10 +301,15 @@ fn swap(key: &Key, word: &str) -> String {
     }
     let length = word.chars().count();
     let seed = hash(key, &word.to_lowercase());
-    let made = if length <= WORDS.len() {
+    // Not even the length is kept exactly: one letter more or less, or
+    // the same, by the secret, so a word's size doesn't narrow it down.
+    let made_length = (length + (seed >> 56) as usize % 3)
+        .saturating_sub(1)
+        .max(1);
+    let lower = word.to_lowercase();
+    let made = if made_length <= WORDS.len() {
         // Never the word itself, should the list happen to have it.
-        let words = WORDS[length - 1];
-        let lower = word.to_lowercase();
+        let words = WORDS[made_length - 1];
         let first = pick(words, seed);
         if first == lower {
             pick(words, seed + 1)
@@ -300,11 +318,14 @@ fn swap(key: &Key, word: &str) -> String {
         }
         .to_owned()
     } else {
-        let half = length / 2;
+        let half = made_length / 2;
         format!(
             "{}{}",
             pick(WORDS[(half - 1).min(WORDS.len() - 1)], seed),
-            pick(WORDS[(length - half - 1).min(WORDS.len() - 1)], seed >> 32)
+            pick(
+                WORDS[(made_length - half - 1).min(WORDS.len() - 1)],
+                seed >> 32
+            )
         )
     };
     let capital = word.chars().next().is_some_and(char::is_uppercase);
@@ -356,11 +377,11 @@ mod tests {
 
     #[test]
     fn text_keeps_its_shape_and_nothing_real() {
-        let text = "Invoice #2024-118 from Okafor Design: $1,250 due Friday.";
+        let text = "Receipt #2024-118 from Okafor Design: $1,250 due Friday.";
         let scrambled = ON.text(text);
         assert!(scrambled.chars().count() > 20);
         for real in [
-            "Invoice", "2024", "118", "Okafor", "Design", "1,250", "Friday",
+            "Receipt", "2024", "118", "Okafor", "Design", "1,250", "Friday",
         ] {
             assert!(!scrambled.contains(real), "{real} in {scrambled}");
         }

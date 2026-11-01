@@ -43,10 +43,20 @@ the app's own Luau.
 
 - **Scramble** (View › Scramble Names and Text, ⌘⇧X), to share a
   screenshot of a real archive: every name, address, subject, body, label
-  and filename is swapped for a made-up one of the same shape (a person keeps
-  one name everywhere), HTML mail shows as its scrambled text, pictures are
-  hidden, and the title bar says "Scrambled". Counts, dates and layout stay.
-  It is kept across launches; ⌘⇧X or the pill turns it off.
+  and filename is swapped for a made-up one (a person keeps one name
+  everywhere), HTML mail shows as its scrambled text, pictures are hidden,
+  and the title bar says "Scrambled". It is kept across launches; ⌘⇧X or
+  the pill turns it off.
+
+  A screenshot can't be descrambled: each made-up word or name comes from a
+  short list, chosen by a hash keyed with a random secret made on your
+  machine (`~/.cache/msgvault-moonframe/scramble.key`, never shown), so
+  many real words share each made-up one and nobody without the secret can
+  check a guess. Even word lengths vary. A test opens every conversation of
+  the demo archive and fails if any of its words shows while scrambled.
+  What stays, so it still looks like mail: dates and times, counts and
+  sizes, emoji, punctuation, a file's extension, the kinds of sources, and
+  roughly how long each text is. Don't share `scramble.key`.
 
 ## Run it
 
