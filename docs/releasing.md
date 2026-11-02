@@ -65,7 +65,7 @@ Wasm providers prebuilt; the Linux and Windows archives build none, as the
 app only runs native providers.
 
 These names are what the app's **Check for Updates…** looks for
-(Moonframe's updater, `.updates("penso/msgvault-moonframe")` in `main.rs`):
+(Moonframe's updater, `.updates("moonframehq/msgvault")` in `main.rs`):
 an installed copy checks the newest published release once a day. On macOS
 it installs the disk image after checking it against `SHA256SUMS`, its
 bundle id and, when signed with a Developer ID, its team; elsewhere it opens
@@ -75,10 +75,10 @@ the download. Drafts and pre-releases are never offered.
 
 ```sh
 sha256sum --check --ignore-missing SHA256SUMS
-gh attestation verify msgvault-moonframe-<v>-universal-apple-darwin.dmg --repo penso/msgvault-moonframe
+gh attestation verify msgvault-moonframe-<v>-universal-apple-darwin.dmg --repo moonframehq/msgvault
 cosign verify-blob msgvault-moonframe-<v>-universal-apple-darwin.dmg \
   --bundle msgvault-moonframe-<v>-universal-apple-darwin.dmg.sigstore.json \
-  --certificate-identity https://github.com/penso/msgvault-moonframe/.github/workflows/release.yml@refs/heads/main \
+  --certificate-identity https://github.com/moonframehq/msgvault/.github/workflows/release.yml@refs/heads/main \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 ```
 
@@ -115,7 +115,7 @@ first launch. It is signed with Azure Artifact Signing, under the publisher
 author's apps shares. There is no key, certificate or secret to store: the
 `sign-windows` job exchanges the `release` environment's GitHub OIDC token
 for an Azure token as the `moonframe-signing` app registration, which needs
-a federated credential trusting `repo:penso/msgvault-moonframe:environment:release`
+a federated credential trusting `repo:moonframehq/msgvault:environment:release`
 (beside Moonframe's own) and holds the *Artifact Signing Certificate Profile Signer* role on
 that profile. Add to the `release` environment, all as variables:
 

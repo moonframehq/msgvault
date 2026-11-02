@@ -30,7 +30,7 @@ jobs:
   audit:
     name: Workflow security
     if: >-
-      github.repository == 'penso/msgvault-moonframe' &&
+      github.repository == 'moonframehq/msgvault' &&
       github.ref == 'refs/heads/main' &&
       github.actor == 'penso' && github.triggering_actor == 'penso'
     runs-on: ubuntu-24.04

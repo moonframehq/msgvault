@@ -53,7 +53,7 @@ fn main() -> ExitCode {
         .version(env!("CARGO_PKG_VERSION"))
         // Check for Updates…, and a daily check in an installed copy: the
         // newest release here, its disk image verified against SHA256SUMS.
-        .updates("penso/msgvault-moonframe")
+        .updates("moonframehq/msgvault")
         .icon(include_bytes!("../app/icon.png"));
     let app = if from_checkout() {
         app.app_dir(SOURCE)
