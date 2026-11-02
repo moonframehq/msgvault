@@ -1,3 +1,5 @@
+<p align="center"><img src="assets/icon.png" width="128" alt="msgvault on Moonframe"></p>
+
 # msgvault-moonframe
 
 A native reader for [msgvault](https://github.com/wesm/msgvault) archives
