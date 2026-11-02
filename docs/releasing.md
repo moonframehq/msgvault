@@ -38,6 +38,11 @@ The workflow then:
    with generated notes, checks the uploaded files against `SHA256SUMS`, and
    publishes it.
 
+The release waits 45 minutes for CI. When CI's macOS job is still queued by
+then, the release fails without signing or publishing anything; once CI has
+passed, `gh run rerun <release run id> --failed` resumes it with the
+packages already built.
+
 Only the `sign-macos`, `sign-windows`, `attest` and `publish` jobs enter
 the `release` environment. Protect it (Settings → Environments) so it only accepts
 `main`, and add yourself as a required reviewer if releases should wait for

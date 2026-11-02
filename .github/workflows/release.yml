@@ -113,12 +113,15 @@ jobs:
           fi
 
   # Packaging overlaps CI so the two do not add up, but nothing is signed or
-  # published until this job has seen CI pass on the commit.
+  # published until this job has seen CI pass on the commit. It waits 45
+  # minutes: CI's macOS job can sit queued for hours when the account's
+  # runners are busy. The packages are kept, so re-running the failed jobs
+  # once CI has passed picks up from here.
   ci-gate:
     name: Require CI on this commit
     needs: validate
     runs-on: ubuntu-24.04
-    timeout-minutes: 180
+    timeout-minutes: 50
     permissions:
       actions: read # read CI's workflow runs for this commit
     steps:
@@ -128,6 +131,7 @@ jobs:
           SHA: ${{ needs.validate.outputs.sha }}
         run: |
           set -euo pipefail
+          deadline=$((SECONDS + 45 * 60))
           while :; do
             run=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$SHA&branch=main&event=push" \
               --jq '.workflow_runs | sort_by(.run_number) | last | if . == null then "missing" else .status + " " + (.conclusion // "") end')
@@ -136,6 +140,10 @@ jobs:
               "completed success") exit 0 ;;
               completed*) echo "::error::CI did not pass on $SHA"; exit 1 ;;
             esac
+            if (( SECONDS >= deadline )); then
+              echo "::error::CI has not finished on $SHA after 45 minutes ($run). Once it passes, run: gh run rerun $GITHUB_RUN_ID --failed"
+              exit 1
+            fi
             sleep 60
           done
 
