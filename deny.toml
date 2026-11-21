@@ -20,11 +20,7 @@ yanked  = "deny"
 # Security vulnerabilities always fail. "Unmaintained" is scoped to crates this
 # workspace depends on directly: GPUI's own tree carries discontinued crates
 # that we cannot act on without changing the pinned gpui-kit version.
-ignore = [
-  { id = "RUSTSEC-2026-0391", reason = "zstd 0.13 only via Moonframe's wasmtime compilation cache, which is never enabled; msgvault-core uses zstd 0.14" },
-  { id = "RUSTSEC-2026-0398", reason = "zstd 0.13 only via Moonframe's wasmtime compilation cache, which is never enabled; msgvault-core uses zstd 0.14" },
-  { id = "RUSTSEC-2026-0403", reason = "zstd 0.13 only via Moonframe's wasmtime compilation cache, which is never enabled; msgvault-core uses zstd 0.14" },
-]
+ignore = []
 unmaintained = "workspace"
 
 [licenses]
